@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  ArixLog - instalador
+#  LogsPterodactyl - instalador
 #
 #  Extension para el panel de Pterodactyl compatible con el tema Arix.
 #
@@ -31,7 +31,7 @@ warn()  { printf '  %s[..]%s   %s\n' "$Y" "$N" "$1"; }
 err()   { printf '  %s[!!]%s   %s\n' "$R" "$N" "$1"; }
 title() { printf '\n%s%s%s\n' "$B" "$1" "$N"; }
 
-printf '\n%s  ArixLog - instalador%s\n' "$B" "$N"
+printf '\n%s  LogsPterodactyl - instalador%s\n' "$B" "$N"
 printf '  ---------------------------------------------------------------\n'
 
 # --- Comprobaciones previas -------------------------------------------------
@@ -72,21 +72,50 @@ fi
 
 title "1. Copiando los archivos"
 
+# --- Traspaso desde la version anterior (se llamaba ArixLog) ---------------
+# Se quita lo viejo ANTES de copiar lo nuevo. Las tablas no se tocan aqui: las
+# renombra una migracion de la propia extension conservando el contenido.
+
+if [ -d "$PANEL/app/Extensions/ArixLog" ] || grep -q 'ArixLogServiceProvider' "$PANEL/config/app.php" 2>/dev/null; then
+    warn "Detectada la version anterior (ArixLog). Traspasando..."
+
+    if [ -f "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" ]; then
+        php "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" "$PANEL" --remove >/dev/null 2>&1
+    fi
+
+    # Por si el script anterior ya no estuviera: se limpia igualmente.
+    if grep -q 'ArixLogServiceProvider' "$PANEL/config/app.php" 2>/dev/null; then
+        cp "$PANEL/config/app.php" "$PANEL/config/app.php.antes-del-traspaso"
+        sed -i '/ArixLog START/,/ArixLog END/d; /ArixLogServiceProvider/d' "$PANEL/config/app.php"
+
+        if php -l "$PANEL/config/app.php" >/dev/null 2>&1; then
+            rm -f "$PANEL/config/app.php.antes-del-traspaso"
+        else
+            mv "$PANEL/config/app.php.antes-del-traspaso" "$PANEL/config/app.php"
+            err "No se pudo quitar la linea vieja de config/app.php. Quitala a mano."
+        fi
+    fi
+
+    rm -rf "$PANEL/app/Extensions/ArixLog" "$PANEL/public/extensions/arixlog"
+    rm -f "$PANEL/config/app.php.arixlog-backup"
+    ok "Version anterior retirada (los datos se conservan y se traspasan solos)"
+fi
+
 mkdir -p "$PANEL/app/Extensions" "$PANEL/public/extensions"
 
 # Se borra la version anterior de la carpeta de la extension para que no
 # queden archivos sueltos de una version antigua. Solo se toca esa carpeta.
-rm -rf "$PANEL/app/Extensions/ArixLog"
+rm -rf "$PANEL/app/Extensions/LogsPterodactyl"
 
-if cp -r "$SOURCE/app/Extensions/ArixLog" "$PANEL/app/Extensions/ArixLog"; then
-    ok "Codigo copiado a app/Extensions/ArixLog"
+if cp -r "$SOURCE/app/Extensions/LogsPterodactyl" "$PANEL/app/Extensions/LogsPterodactyl"; then
+    ok "Codigo copiado a app/Extensions/LogsPterodactyl"
 else
     err "No se pudo copiar el codigo. ¿Estas ejecutando con sudo?"
     exit 1
 fi
 
-if cp -r "$SOURCE/public/extensions/arixlog" "$PANEL/public/extensions/"; then
-    ok "Recursos copiados a public/extensions/arixlog"
+if cp -r "$SOURCE/public/extensions/logspterodactyl" "$PANEL/public/extensions/"; then
+    ok "Recursos copiados a public/extensions/logspterodactyl"
 else
     err "No se pudieron copiar los recursos publicos."
     exit 1
@@ -95,18 +124,18 @@ fi
 # Carpeta donde el actualizador escribe su progreso. Tiene que existir y ser
 # escribible por el usuario del servidor web, porque durante la actualizacion
 # el panel esta en mantenimiento y esa carpeta se lee como archivo estatico.
-mkdir -p "$PANEL/public/extensions/arixlog/runs"
+mkdir -p "$PANEL/public/extensions/logspterodactyl/runs"
 
 # --- 2. Registrar el proveedor ---------------------------------------------
 
 title "2. Registrando la extension en el panel"
 
-if php "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" "$PANEL"; then
+if php "$PANEL/app/Extensions/LogsPterodactyl/tools/register-provider.php" "$PANEL"; then
     ok "Proveedor registrado en config/app.php"
 else
     err "No se pudo registrar el proveedor en config/app.php"
     printf '  Anade esta linea a mano dentro del array providers:\n'
-    printf '      Pterodactyl\\Extensions\\ArixLog\\ArixLogServiceProvider::class,\n\n'
+    printf '      Pterodactyl\\Extensions\\LogsPterodactyl\\LogsPterodactylServiceProvider::class,\n\n'
     exit 1
 fi
 
@@ -134,12 +163,12 @@ php artisan route:clear  >/dev/null 2>&1 && ok "Cache de rutas limpiada"        
 
 title "4. Creando las tablas"
 
-if php artisan arixlog:install; then
+if php artisan logspterodactyl:install; then
     ok "Base de datos lista"
 else
     err "Fallo al preparar la base de datos."
     printf '  Prueba a ejecutarlo a mano para ver el error:\n'
-    printf '      cd %s && php artisan arixlog:install\n\n' "$PANEL"
+    printf '      cd %s && php artisan logspterodactyl:install\n\n' "$PANEL"
     exit 1
 fi
 
@@ -147,34 +176,13 @@ fi
 
 title "5. Ajustando permisos"
 
-WEB_USER=""
-for candidate in www-data nginx apache; do
-    if id "$candidate" >/dev/null 2>&1; then
-        WEB_USER="$candidate"
-        break
-    fi
-done
-
-if [ -n "$WEB_USER" ]; then
-    chown -R "$WEB_USER:$WEB_USER" \
-        "$PANEL/app/Extensions/ArixLog" \
-        "$PANEL/public/extensions/arixlog" 2>/dev/null \
-        && ok "Propietario de los archivos: $WEB_USER" \
-        || warn "No se pudo cambiar el propietario (¿falta sudo?)"
-else
-    warn "No se identifico el usuario del servidor web, se dejan los permisos como estan"
-fi
-
-BACKUP_DIR="/var/backups/arixlog"
-mkdir -p "$BACKUP_DIR" 2>/dev/null && chmod 700 "$BACKUP_DIR" 2>/dev/null \
-    && ok "Carpeta de respaldos lista: $BACKUP_DIR" \
-    || warn "No se pudo crear $BACKUP_DIR (se puede cambiar en la configuracion)"
+bash "$HERE/permissions.sh" "$PANEL" || warn "Algunos permisos no se pudieron ajustar (vuelve a lanzarlo con sudo)"
 
 # --- 6. Comprobacion final --------------------------------------------------
 
 title "6. Comprobacion final"
 
-php artisan arixlog:doctor || true
+php artisan logspterodactyl:doctor || true
 
 # --- Resumen ----------------------------------------------------------------
 
@@ -183,7 +191,7 @@ PANEL_URL="$(grep -oE '^APP_URL=.*' "$PANEL/.env" 2>/dev/null | head -1 | cut -d
 
 printf '\n%s  Instalacion terminada%s\n' "$G$B" "$N"
 printf '  ---------------------------------------------------------------\n'
-printf '  Panel de la extension:  %s/admin/arixlog\n' "${PANEL_URL:-https://TU-PANEL}"
+printf '  Panel de la extension:  %s/admin/logspterodactyl\n' "${PANEL_URL:-https://TU-PANEL}"
 printf '\n'
 printf '  Siguiente paso importante:\n'
 printf '    Entra en Configuracion y activa el sistema automatico de\n'
