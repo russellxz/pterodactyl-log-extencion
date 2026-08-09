@@ -549,6 +549,24 @@ Si dentro de un servidor tampoco sale:
 Mientras tanto, la pantalla siempre se puede abrir por la direccion directa:
 `https://TU-PANEL/server/ID-DEL-SERVIDOR/dnsreverse`
 
+### Descartar si un problema del panel viene de esta extension
+
+En *Admin -> DNS Reverse -> Configuracion* hay un interruptor
+**"Mostrar la pantalla de DNS a los clientes"**. Al desmarcarlo, en el area de
+cliente **no se carga ni una linea** de la extension: ni css, ni javascript, ni
+la entrada del menu.
+
+Es la forma rapida de saber si algo raro del panel (lentitud, una pagina que no
+termina de cargar, un conflicto con otra cosa) viene de aqui o no:
+
+1. Desmarcalo y guarda.
+2. Recarga con **Ctrl+F5**.
+3. Si el problema sigue, no es esta extension.
+
+Los DNS ya creados **siguen funcionando** con el interruptor apagado: los sirve
+nginx en el nodo, no el panel. Y el area de administracion tampoco se ve
+afectada, asi que puedes seguir gestionandolo todo.
+
 Si el tema tiene un segundo menu para movil con los mismos enlaces, la
 extension evita meter ahi la entrada: comprueba que se vea de verdad y, si no,
 busca otra barra en el siguiente repaso.

@@ -36,6 +36,14 @@ class Settings
         // --- Dominios propios del cliente ---
         'allow_custom_domains' => '1',
 
+        // Interruptor de la pantalla del area de cliente.
+        //
+        // Apagarlo deja de cargar el css y el js en las paginas del cliente:
+        // los DNS siguen funcionando y el area de administracion tambien, pero
+        // los clientes dejan de ver la entrada. Sirve para descartar en dos
+        // segundos si algun problema del panel viene de aqui o no.
+        'client_ui_enabled' => '1',
+
         // --- Seguridad ---
         // Dominios que nadie puede usar aunque los escriba tal cual. Se anade
         // ademas, siempre, el dominio del panel y el FQDN de cada nodo.

@@ -32,6 +32,16 @@
         // llegue a leer que su dominio se creo bien.
         aviso: null,
         ultimoAviso: null,
+        // Referencia a nuestra entrada del menu. Comprobar si sigue puesta con
+        // isConnected cuesta practicamente nada, y evita tener que rastrear el
+        // DOM cuando no hace falta.
+        enlace: null,
+        repasoPendiente: false,
+        // Freno para cuando no se encuentra la barra: se espera cada vez un
+        // poco mas en vez de rastrear el DOM sin parar.
+        esperaFallo: 0,
+        siguienteIntento: 0,
+        temporizadorFallo: null,
     };
 
     // --- Iconos -------------------------------------------------------------
@@ -235,7 +245,23 @@
     function ponerEntrada() {
         var servidor = servidorActual();
 
-        if (!servidor || document.querySelector('[data-dnsrev-nav]')) {
+        if (!servidor) {
+            estado.enlace = null;
+
+            return;
+        }
+
+        // Salida barata: si la entrada sigue colgando del documento no hay que
+        // tocar nada. Es lo que evita rastrear el DOM en cada cambio.
+        if (estado.enlace && estado.enlace.isConnected) {
+            return;
+        }
+
+        var yaPuesta = document.querySelector('[data-dnsrev-nav]');
+
+        if (yaPuesta) {
+            estado.enlace = yaPuesta;
+
             return;
         }
 
@@ -243,13 +269,30 @@
 
         if (!barra) {
             // Todavia no esta dibujada (el panel es una aplicacion de una sola
-            // pagina y tarda un poco) o el tema la monta de otra forma. Se
-            // vuelve a intentar en el siguiente repaso, cada 700 ms.
+            // pagina y tarda un poco) o el tema la monta de otra forma.
+            //
+            // Se espera cada vez un poco mas antes de volver a mirar, hasta un
+            // maximo de 5 segundos. Sin este freno, en un tema que no se
+            // reconociera se rastrearia el DOM en cada cambio, que en una
+            // aplicacion de React son cientos.
+            estado.esperaFallo = Math.min((estado.esperaFallo || 150) * 2, 5000);
+            estado.siguienteIntento = Date.now() + estado.esperaFallo;
+
+            // Y se programa el reintento: si el DOM no vuelve a cambiar, nadie
+            // nos avisaria y la entrada no llegaria a ponerse nunca.
+            window.clearTimeout(estado.temporizadorFallo);
+            estado.temporizadorFallo = window.setTimeout(function () {
+                estado.siguienteIntento = 0;
+                repasar();
+            }, estado.esperaFallo);
+
             avisar('todavia no se encuentra la barra del servidor, reintentando');
 
             return;
         }
 
+        estado.esperaFallo = 0;
+        estado.siguienteIntento = 0;
         avisar('entrada anadida a la barra del servidor');
 
         var referencia = barra.querySelector('a[href*="/server/"]');
@@ -276,8 +319,13 @@
                 enlace.parentNode.removeChild(enlace);
             }
 
+            estado.enlace = null;
             avisar('la barra encontrada estaba oculta, se busca otra');
+
+            return;
         }
+
+        estado.enlace = enlace;
     }
 
     // --- Pantalla -----------------------------------------------------------
@@ -984,19 +1032,56 @@
     }
 
     // --- Arranque -----------------------------------------------------------
+    //
+    // El panel es una aplicacion de una sola pagina: la URL cambia sin recargar
+    // y React vuelve a dibujar la barra del servidor cuando le apetece. Hay que
+    // enterarse de eso, pero SIN estar dando vueltas todo el rato.
+    //
+    // La primera version repasaba el DOM cada 700 ms para siempre, y en cada
+    // vuelta recorria todos los enlaces llamando a getBoundingClientRect(), que
+    // obliga al navegador a recalcular el diseño de la pagina. En un movil (mas
+    // aun en modo escritorio, donde se dibuja mucho mas contenido) eso se come
+    // la CPU sin ninguna necesidad.
+    //
+    // Ahora se reacciona a lo que pasa:
+    //   - un observador avisa cuando el DOM cambia
+    //   - se vigilan los cambios de direccion de la aplicacion
+    // y ademas hay una salida en O(1): si nuestra entrada sigue puesta y la
+    // direccion no ha cambiado, no se mira absolutamente nada mas.
+
+    function hayQueRevisar() {
+        if (window.location.pathname !== estado.ultimaRuta) {
+            return true;
+        }
+
+        // Si el enlace sigue colgando del documento no hay nada que hacer.
+        if (estado.enlace && estado.enlace.isConnected) {
+            return false;
+        }
+
+        // Y si el ultimo intento fallo, se respeta la espera antes de volver.
+        return !estado.siguienteIntento || Date.now() >= estado.siguienteIntento;
+    }
 
     function repasar() {
         var ruta = window.location.pathname;
+        var cambioDeRuta = ruta !== estado.ultimaRuta;
 
-        if (ruta === estado.ultimaRuta) {
-            ponerEntrada();
-            return;
+        if (cambioDeRuta) {
+            estado.ultimaRuta = ruta;
+            estado.servidor = servidorActual();
+
+            // Pantalla nueva: se empieza a buscar desde cero.
+            estado.esperaFallo = 0;
+            estado.siguienteIntento = 0;
+            estado.enlace = null;
         }
 
-        estado.ultimaRuta = ruta;
-        estado.servidor = servidorActual();
-
         ponerEntrada();
+
+        if (!cambioDeRuta) {
+            return;
+        }
 
         var esNuestra = new RegExp('/server/[^/]+/' + RUTA + '/?$').test(ruta);
 
@@ -1015,17 +1100,69 @@
         }
     }
 
+    /**
+     * Agrupa varios avisos seguidos en un solo repaso. React dispara cientos de
+     * cambios en el DOM al dibujar una pantalla; sin esto se repasaria una vez
+     * por cada uno.
+     */
+    function programarRepaso() {
+        if (estado.repasoPendiente || !hayQueRevisar()) {
+            return;
+        }
+
+        estado.repasoPendiente = true;
+
+        window.setTimeout(function () {
+            estado.repasoPendiente = false;
+            repasar();
+        }, 120);
+    }
+
+    /**
+     * React Router cambia de pantalla con history.pushState, que no dispara
+     * ningun evento. Se envuelven las dos funciones para enterarnos.
+     */
+    function vigilarNavegacion() {
+        ['pushState', 'replaceState'].forEach(function (nombre) {
+            var original = window.history[nombre];
+
+            if (typeof original !== 'function' || original.dnsrev) {
+                return;
+            }
+
+            var envuelta = function () {
+                var resultado = original.apply(this, arguments);
+                programarRepaso();
+
+                return resultado;
+            };
+
+            envuelta.dnsrev = true;
+            window.history[nombre] = envuelta;
+        });
+
+        window.addEventListener('popstate', programarRepaso);
+        window.addEventListener('hashchange', programarRepaso);
+    }
+
     function arrancar() {
         if (!document.body) {
             return;
         }
 
         repasar();
+        vigilarNavegacion();
 
-        // El panel es una aplicacion de una sola pagina: la URL cambia sin
-        // recargar y la barra del servidor se vuelve a dibujar sola.
-        window.setInterval(repasar, 700);
-        window.addEventListener('popstate', repasar);
+        if (typeof window.MutationObserver === 'function') {
+            new window.MutationObserver(programarRepaso)
+                .observe(document.body, { childList: true, subtree: true });
+
+            return;
+        }
+
+        // Navegador sin MutationObserver (muy raro): se vuelve al repaso por
+        // tiempo, pero espaciado y con la salida rapida de hayQueRevisar().
+        window.setInterval(programarRepaso, 2000);
     }
 
     if (document.readyState === 'loading') {

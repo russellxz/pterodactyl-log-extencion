@@ -117,6 +117,16 @@ class InjectAssets
 
     private function clientTags(Request $request): string
     {
+        // Interruptor de la pantalla del cliente. Apagado, en las paginas del
+        // area de cliente no se cuela ni una etiqueta.
+        try {
+            if (!\Pterodactyl\Extensions\DnsReverse\Support\Settings::make()->bool('client_ui_enabled')) {
+                return '';
+            }
+        } catch (\Throwable) {
+            // Si no se puede leer la configuracion se sigue como siempre.
+        }
+
         $base = $this->assetBase();
         $version = $this->version();
 
