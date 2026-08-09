@@ -14,7 +14,7 @@
 
     var config = window.LogsPterodactylConfig || {};
     var ENDPOINT = (config.endpoint || '/api/logspterodactyl').replace(/\/$/, '');
-    var POLL_MS = 20000;
+    var POLL_MS = 10000;
 
     var state = {
         server: null,
@@ -22,6 +22,8 @@
         card: null,
         cardMode: null,
         busy: false,
+        wasInstalling: false,
+        reloaded: false,
         dismissed: {},
         lastPath: null,
     };
@@ -376,6 +378,8 @@
         // Al cambiar de servidor (el panel es una SPA) se limpia la tarjeta.
         if (server !== state.server) {
             state.server = server;
+            state.wasInstalling = false;
+            state.reloaded = false;
             remove();
         }
 
@@ -393,6 +397,8 @@
             }
 
             if (payload.installing) {
+                state.wasInstalling = true;
+
                 if (!payload.can_cancel) {
                     remove();
                     return;
@@ -402,7 +408,16 @@
                 return;
             }
 
-            // No esta instalando. Si acaba de fallar se ofrece relanzarla.
+            // Ya no esta instalando. Si la pagina se cargo cuando si lo estaba,
+            // la aplicacion del panel sigue ensenando "Running Installer"
+            // porque guarda el estado en memoria: hay que recargar.
+            if (state.wasInstalling && !state.reloaded) {
+                state.reloaded = true;
+                window.location.reload();
+                return;
+            }
+
+            // Si acaba de fallar se ofrece relanzarla.
             if (payload.failed && payload.can_reinstall) {
                 show({ serverId: server, mode: 'failed' });
                 return;

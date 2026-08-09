@@ -116,7 +116,7 @@ class InstallGuard
      *     warnings: array<int, string>
      * }
      */
-    public function stop(Server $server, string $mode, string $by, bool $notifyOwner = true): array
+    public function stop(Server $server, string $mode, string $by, bool $notifyOwner = true, bool $forceAnyway = false): array
     {
         $warnings = [];
         $wingsDeleted = false;
@@ -132,6 +132,23 @@ class InstallGuard
         //    instalacion como fallida, pero el contenedor sigue vivo y cuando
         //    termina avisa al panel, que vuelve a mover el estado del servidor.
         //    Al cliente le parece que nunca se paro.
+        // Antes de borrar nada hay que estar seguro de que no hay datos del
+        // cliente de por medio: borrar en el nodo destruye los archivos del
+        // servidor. En una instalacion que nunca termino no hay nada que
+        // perder, pero en la reinstalacion de un servidor que ya funcionaba
+        // estariamos borrandole el mundo entero a un cliente.
+        if ($forzado && !$forceAnyway && !$this->safeToDestroy($server)) {
+            $forzado = false;
+            $warnings[] = 'No se borro en el nodo porque este servidor ya tenia una instalacion completada '
+                . 'y hacerlo destruiria los archivos del cliente. Se marco como fallida y se cambio el puerto; '
+                . 'el contenedor de instalacion del nodo puede seguir corriendo hasta que termine solo.';
+
+            ExtensionEvent::log('warning', 'installs', sprintf(
+                'No se forzo la parada de "%s": tiene datos y borrarlo en el nodo los destruiria',
+                $server->name
+            ), [], $server->id);
+        }
+
         if ($forzado) {
             try {
                 $this->daemon->setServer($server)->delete();
@@ -223,21 +240,86 @@ class InstallGuard
     }
 
     /**
-     * Vuelve a crear el servidor en el nodo y lanza la instalacion. Hace falta
-     * despues de un corte en modo forzado, porque el servidor ya no existe en
-     * wings y el boton nativo de reinstalar del panel daria un 404.
+     * ¿Se puede borrar este servidor en el nodo sin cargarse datos del cliente?
+     *
+     * Solo si nunca llego a completarse una instalacion. Ojo con un detalle:
+     * el panel rellena installed_at incluso cuando la instalacion FALLA, asi
+     * que ese campo por si solo no vale. Por eso se mira tambien el historial
+     * propio: si todos los intentos anteriores acabaron mal, no hay nada
+     * valioso en el disco.
+     */
+    public function safeToDestroy(Server $server): bool
+    {
+        // Nunca se instalo: seguro.
+        if ($server->installed_at === null) {
+            return true;
+        }
+
+        $historial = InstallEvent::query()
+            ->where('server_id', $server->id)
+            ->whereIn('status', [
+                InstallEvent::STATUS_SUCCESS,
+                InstallEvent::STATUS_FAILED,
+                InstallEvent::STATUS_TIMEOUT,
+                InstallEvent::STATUS_CANCELLED,
+            ])
+            ->get(['status']);
+
+        // Sin historial propio no se puede saber, asi que se es prudente:
+        // installed_at con fecha puede significar un servidor que funcionaba.
+        if ($historial->isEmpty()) {
+            return false;
+        }
+
+        // Si alguna vez termino bien, tiene datos del cliente.
+        return !$historial->contains(fn ($e) => $e->status === InstallEvent::STATUS_SUCCESS);
+    }
+
+    /**
+     * Vuelve a crear el servidor en el nodo y lanza la instalacion.
+     *
+     * Hace falta despues de un corte forzado, porque el servidor ya no existe
+     * en wings y el boton nativo de reinstalar del panel daria un 404. Si
+     * resulta que si existe (porque el corte no llego a borrarlo), se usa la
+     * reinstalacion normal en vez de intentar crearlo dos veces.
      */
     public function recreate(Server $server): void
     {
         $server->forceFill(['status' => Server::STATUS_INSTALLING])->save();
 
-        $this->daemon->setServer($server)->create(false);
+        try {
+            $this->daemon->setServer($server)->create(false);
+            $via = 'recreado en el nodo';
+        } catch (\Throwable $e) {
+            $mensaje = $this->short($e);
+            $yaExiste = str_contains($mensaje, '409')
+                || str_contains($mensaje, '422')
+                || stripos($mensaje, 'already exists') !== false;
 
-        $this->openInstallEvent($server, $server->installed_at !== null);
+            if (!$yaExiste) {
+                // No se pudo crear y tampoco es que ya existiera: se deja el
+                // servidor como estaba para que no quede colgado en
+                // "instalando" para siempre.
+                $server->forceFill([
+                    'status' => $server->installed_at === null
+                        ? Server::STATUS_INSTALL_FAILED
+                        : Server::STATUS_REINSTALL_FAILED,
+                ])->save();
+
+                throw $e;
+            }
+
+            // El servidor seguia en el nodo: se reinstala por la via normal.
+            $this->daemon->setServer($server)->reinstall();
+            $via = 'reinstalado (seguia existiendo en el nodo)';
+        }
+
+        $this->openInstallEvent($server, true);
 
         ExtensionEvent::log('info', 'installs', sprintf(
-            'Servidor "%s" recreado en el nodo y reinstalando',
-            $server->name
+            'Servidor "%s" %s, instalando de nuevo',
+            $server->name,
+            $via
         ), ['puerto' => $this->ports->label($server->allocation)], $server->id);
     }
 

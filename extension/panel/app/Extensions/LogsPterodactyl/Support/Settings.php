@@ -48,6 +48,11 @@ class Settings
         'mail_log_store_body' => '1',
         'mail_log_retention_days' => '60',
         'mail_logo_url' => '',
+        // marco  -> el HTML del administrador va dentro de la plantilla de serie
+        // custom -> el marco lo escribe el administrador (usa {{contenido}})
+        // raw    -> se envia el HTML tal cual, sin nada alrededor
+        'mail_template_mode' => 'marco',
+        'mail_template_html' => '',
 
         // --- Monitor de recursos ---
         'resources_enabled' => '1',

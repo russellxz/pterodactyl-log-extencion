@@ -134,37 +134,79 @@ class InstallsController extends Controller
     public function live(): JsonResponse
     {
         $rows = [];
+        $error = null;
 
-        foreach ($this->guard->installing() as $server) {
-            $minutes = $this->guard->minutesInstalling($server);
+        try {
+            foreach ($this->guard->installing() as $server) {
+                $minutes = $this->guard->minutesInstalling($server);
 
-            $rows[] = [
-                'id' => $server->id,
-                'name' => $server->name,
-                'uuid_short' => $server->uuidShort,
-                'owner' => trim(($server->user->name_first ?? '') . ' ' . ($server->user->name_last ?? ''))
-                    ?: ($server->user->username ?? '-'),
-                'owner_email' => $server->user->email ?? '-',
-                'node' => $server->node->name ?? '-',
-                'egg' => $server->egg->name ?? '-',
-                'allocation' => $this->ports->label($server->allocation),
-                'minutes' => $minutes,
-                'started_at' => $this->guard->startedAt($server)->toDateTimeString(),
-                'is_reinstall' => $server->installed_at !== null,
-                'over_limit' => $minutes >= $this->settings->int('watchdog_minutes', 1, 1440),
-                'free_ports' => $this->ports->freeCount($server->node_id),
-                'admin_url' => url('/admin/servers/view/' . $server->id),
-            ];
+                $rows[] = [
+                    'id' => $server->id,
+                    'name' => $server->name,
+                    'uuid_short' => $server->uuidShort,
+                    'owner' => trim(($server->user->name_first ?? '') . ' ' . ($server->user->name_last ?? ''))
+                        ?: ($server->user->username ?? '-'),
+                    'owner_email' => $server->user->email ?? '-',
+                    'node' => $server->node->name ?? '-',
+                    'egg' => $server->egg->name ?? '-',
+                    'allocation' => $this->ports->label($server->allocation),
+                    'minutes' => $minutes,
+                    'started_at' => $this->guard->startedAt($server)->toDateTimeString(),
+                    'is_reinstall' => $server->installed_at !== null,
+                    'safe_to_destroy' => $this->guard->safeToDestroy($server),
+                    'over_limit' => $minutes >= $this->settings->int('watchdog_minutes', 1, 1440),
+                    'free_ports' => $this->ports->freeCount($server->node_id),
+                    'admin_url' => url('/admin/servers/view/' . $server->id),
+                ];
+            }
+
+            usort($rows, fn ($a, $b) => $b['minutes'] <=> $a['minutes']);
+        } catch (\Throwable $e) {
+            // Antes, un fallo aqui devolvia un 500 y la pantalla se quedaba en
+            // "Cargando..." sin decir nada. Ahora se ve el motivo.
+            report($e);
+            $error = $e->getMessage() . ' (' . basename($e->getFile()) . ':' . $e->getLine() . ')';
         }
-
-        usort($rows, fn ($a, $b) => $b['minutes'] <=> $a['minutes']);
 
         return new JsonResponse([
             'servers' => $rows,
+            'error' => $error,
             'limit_minutes' => $this->settings->int('watchdog_minutes', 1, 1440),
             'watchdog_enabled' => $this->settings->bool('watchdog_enabled'),
+            'diagnostico' => $this->diagnostico(),
             'generated_at' => now()->toDateTimeString(),
         ]);
+    }
+
+    /**
+     * Cuantos servidores hay en cada estado, leido directamente de la tabla.
+     *
+     * Sirve para responder a "el sistema no detecta las instalaciones": si el
+     * panel dice que hay servidores instalando y aqui salen cero, el problema
+     * es que el estado en la base de datos no es "installing"; si salen y la
+     * tabla de arriba esta vacia, el problema es de la extension.
+     *
+     * @return array<string, mixed>
+     */
+    private function diagnostico(): array
+    {
+        try {
+            $porEstado = Server::query()
+                ->selectRaw('COALESCE(status, \'(instalado / sin estado)\') as estado, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'estado')
+                ->all();
+
+            return [
+                'servidores_por_estado' => $porEstado,
+                'total_servidores' => (int) Server::query()->count(),
+                'abiertos_en_historial' => (int) InstallEvent::query()
+                    ->where('status', InstallEvent::STATUS_INSTALLING)
+                    ->count(),
+            ];
+        } catch (\Throwable $e) {
+            return ['error' => $e->getMessage()];
+        }
     }
 
     /**
@@ -191,7 +233,13 @@ class InstallsController extends Controller
         $by = $request->user()->email ?? 'administrador';
 
         try {
-            $result = $this->guard->stop($model, $mode, $by, $request->boolean('notify', true));
+            $result = $this->guard->stop(
+                $model,
+                $mode,
+                $by,
+                $request->boolean('notify', true),
+                $request->boolean('force_anyway')
+            );
         } catch (\Throwable $e) {
             return back()->with('logspterodactyl_error', 'No se pudo detener la instalacion: ' . $e->getMessage());
         }

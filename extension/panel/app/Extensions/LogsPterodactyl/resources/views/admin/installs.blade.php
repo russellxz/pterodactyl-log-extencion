@@ -301,8 +301,33 @@
             }
 
             function render(data) {
+                if (data.error) {
+                    container.innerHTML = '<div class="logspterodactyl-alert logspterodactyl-alert-error" style="margin:14px;">'
+                        + '<span>No se pudo leer la lista: ' + escapeHtml(data.error) + '</span></div>';
+                    return;
+                }
+
                 if (!data.servers.length) {
-                    container.innerHTML = '<p class="logspterodactyl-empty">No hay ningun servidor instalando en este momento.</p>';
+                    var d = data.diagnostico || {};
+                    var estados = d.servidores_por_estado || {};
+                    var detalle = '';
+
+                    for (var k in estados) {
+                        if (Object.prototype.hasOwnProperty.call(estados, k)) {
+                            detalle += '<li><code>' + escapeHtml(k) + '</code>: ' + estados[k] + '</li>';
+                        }
+                    }
+
+                    container.innerHTML = '<p class="logspterodactyl-empty">No hay ningun servidor instalando en este momento.</p>'
+                        + '<div class="logspterodactyl-diag">'
+                        + '<strong>Estado real de la base de datos</strong> ('
+                        + (d.total_servidores || 0) + ' servidores en total)'
+                        + '<ul>' + (detalle || '<li>sin datos</li>') + '</ul>'
+                        + '<p>Si el panel te ensena un servidor "instalando" pero aqui no aparece '
+                        + 'ninguno en <code>installing</code>, la instalacion ya termino (bien o mal) '
+                        + 'y lo que ves es la pantalla del navegador sin refrescar. '
+                        + 'Recarga la pagina del servidor con Ctrl+F5.</p>'
+                        + '</div>';
                     return;
                 }
 
@@ -328,9 +353,14 @@
                         + form(stopUrlTemplate, s.id, { mode: 'fail_rotate', notify: '1' },
                             'Parar y cambiar puerto', 'btn-warning',
                             'Se marcara la instalacion como fallida y se movera el servidor a otro puerto libre del nodo. ¿Continuar?')
-                        + form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1' },
-                            'Parada forzada', 'btn-danger',
-                            'ADEMAS de lo anterior se borrara el servidor en el nodo para cortar el contenedor de instalacion colgado. Los archivos de esa instalacion incompleta se pierden y habra que recrear el servidor en el nodo antes de reinstalar. ¿Continuar?')
+                        + (s.safe_to_destroy
+                            ? form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1' },
+                                'Parada forzada', 'btn-danger',
+                                'Se borrara el servidor en el nodo para cortar el contenedor de instalacion. Este servidor nunca llego a instalarse, asi que no hay datos del cliente que perder. Despues habra que recrearlo. ¿Continuar?')
+                            : form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1', force_anyway: '1' },
+                                'Forzar (BORRA DATOS)', 'btn-danger',
+                                'CUIDADO: este servidor YA TENIA una instalacion completada. Forzar la parada BORRA SUS ARCHIVOS EN EL NODO y el cliente perdera todo lo que tuviera dentro. Solo hazlo si sabes que no hay nada que salvar. ¿Continuar de todas formas?'))
+                        + (s.safe_to_destroy ? '' : '<div class="logspterodactyl-muted logspterodactyl-small">tiene datos: la parada normal no borra nada</div>')
                         + '</td></tr>';
                 }
 

@@ -45,6 +45,7 @@ Route::get('/compose/search', [Admin\ComposeController::class, 'search'])->name(
 Route::post('/compose/preview', [Admin\ComposeController::class, 'preview'])->name('compose.preview');
 Route::post('/compose/logo', [Admin\ComposeController::class, 'logo'])->name('compose.logo');
 Route::post('/compose/send', [Admin\ComposeController::class, 'send'])->name('compose.send');
+Route::post('/compose/template', [Admin\ComposeController::class, 'template'])->name('compose.template');
 
 // --- Consumo de recursos ---
 Route::get('/resources', [Admin\ResourcesController::class, 'index'])->name('resources');

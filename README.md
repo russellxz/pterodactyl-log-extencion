@@ -251,6 +251,24 @@ automatico como para el boton del cliente.
 | Marcar y cambiar puerto | Lo anterior + puerto nuevo. | **No** |
 | **Forzado** (por defecto) | Ademas borra el servidor en el nodo. | **Si** |
 
+#### Los datos del cliente estan protegidos
+
+Borrar el servidor en el nodo tambien borra sus archivos. Por eso el modo
+forzado **solo se aplica cuando no hay nada que perder**: cuando el servidor
+nunca llego a completar una instalacion.
+
+| Situacion | ¿Se borra en el nodo? |
+|---|---|
+| Primera instalacion que nunca termino | **Si** (no hay archivos) |
+| Todos los intentos anteriores fallaron | **Si** (no hay archivos) |
+| El servidor ya se instalo bien alguna vez | **No**, jamas |
+| No hay historial y el panel dice que ya se instalo | **No** (por prudencia) |
+
+En los dos ultimos casos se marca como fallida y se cambia el puerto, y en el
+aviso se explica que el contenedor del nodo puede seguir corriendo. El cliente
+**nunca** puede saltarse esta proteccion. El administrador si, con un boton
+aparte que avisa por escrito de que va a borrar los archivos.
+
 Como en modo forzado el servidor deja de existir en el nodo, el boton nativo de
 "reinstalar" del panel daria un 404. Por eso la extension pone su propio boton
 **"Recrear en el nodo"** (admin) y **"Volver a instalar"** (cliente), que lo
@@ -304,6 +322,19 @@ registro no deja un token de acceso a la vista.
   en la cabecera de todos los correos.
 - Marcadores que se sustituyen en cada envio: `{{nombre}}`, `{{correo}}` y
   `{{panel}}`.
+- **Colores y estilos**: puedes usar cualquier HTML con estilos en linea
+  (`<p style="color:#e63946">`). Se respetan tal cual.
+- **Plantilla a tu gusto**, con tres opciones:
+  - *El marco de serie*: cabecera con tu logo y pie automatico.
+  - *Mi propia plantilla*: escribes el HTML completo del correo y pones
+    `{{contenido}}` donde quieras que entre el mensaje. Hay un boton para
+    cargar la de serie y editarla en vez de empezar de cero. Ahi tambien valen
+    `{{logo}}`, `{{panel}}`, `{{url}}`, `{{nombre}}` y `{{correo}}`.
+  - *Sin marco*: se envia exactamente el HTML que escribas, sin nada alrededor.
+
+  Aviso practico: en los correos los estilos van **en linea** y la maquetacion
+  con `<table>`. Gmail y Outlook ignoran las hojas de estilo y no entienden
+  flexbox ni grid.
 - Se manda **uno por uno**, asi ningun cliente ve la direccion de los demas.
 - Cada envio queda agrupado como campana: cuantos salieron y cuantos fallaron.
 
@@ -433,6 +464,16 @@ Si aun asi sigue, mira el registro de la extension (pestana **Registro**): si
 la orden a wings fallo, ahi aparece el motivo (normalmente el panel no llega al
 nodo).
 
+### El panel sigue diciendo "Running Installer" despues de detenerla
+
+La aplicacion del panel guarda el estado del servidor en memoria y no lo vuelve
+a pedir sola. La extension lo detecta y recarga la pagina automaticamente, pero
+si la tenias abierta de antes puede que veas la pantalla vieja: recarga con
+Ctrl+F5 (o tirando hacia abajo en el movil).
+
+Para saber que dice de verdad la base de datos, entra en **Instalaciones**: si
+no hay ninguna en curso, ahi mismo aparece el recuento de servidores por estado.
+
 ### El corte automatico no salta
 
 Comprueba que esta activado en Configuracion y que el cron del panel corre.
@@ -442,6 +483,16 @@ Comprueba que esta activado en Configuracion y que el cron del panel corre.
 
 Tiene que estar activado en Configuracion, el servidor tiene que llevar mas
 minutos de los configurados, y quien mira tiene que ser el **dueno**.
+
+### "Instalaciones" no detecta ninguna instalacion en curso
+
+En esa pantalla, cuando la lista sale vacia, se muestra el recuento de
+servidores por estado leido directamente de la base de datos. Si ahi no hay
+ninguno en `installing`, es que la instalacion ya termino (bien o mal) y lo que
+ves en el navegador es la pantalla sin refrescar.
+
+Si sale un error en rojo, ese es el motivo real y aparece tambien en la pestana
+**Registro**.
 
 ### La tabla de consumo dice que el nodo no responde
 
