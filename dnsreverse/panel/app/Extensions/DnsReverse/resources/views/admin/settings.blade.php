@@ -38,6 +38,20 @@
                             Si lo desmarcas, solo podran pedir subdominios de los dominios que tu hayas dado de alta.
                         </p>
                     </div>
+
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevPantallaCliente" name="client_ui_enabled" value="1"
+                               {{ filter_var($ajustes['client_ui_enabled'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        <label for="dnsrevPantallaCliente">Mostrar la pantalla de DNS a los clientes</label>
+                        <p class="text-muted small">
+                            Si lo desmarcas, en el area de cliente no se carga <strong>ni una linea</strong> de esta
+                            extension: desaparece la entrada del menu del servidor. Los DNS ya creados siguen
+                            funcionando igual y esta pantalla de administracion tampoco se ve afectada.
+                            <br>
+                            Sirve para descartar en dos segundos si algo raro del panel viene de aqui o no:
+                            lo desmarcas, guardas, recargas con Ctrl+F5 y compruebas.
+                        </p>
+                    </div>
                 </div>
             </div>
 
