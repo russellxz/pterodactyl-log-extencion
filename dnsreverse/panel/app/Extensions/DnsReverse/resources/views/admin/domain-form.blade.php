@@ -42,13 +42,13 @@
                         <p class="text-muted small">
                             El token tiene que tener permiso <strong>Zone &rarr; DNS &rarr; Edit</strong> sobre esta zona.
                             Se guarda cifrado y nunca se vuelve a mostrar.
-                            @if($domain->hasToken())
-                                <br>
-                                <label style="font-weight: normal;">
-                                    <input type="checkbox" name="clear_token" value="1"> Borrar el token guardado
-                                </label>
-                            @endif
                         </p>
+                        @if($domain->hasToken())
+                            <div class="dnsreverse-checkfield">
+                                <input type="checkbox" id="dnsrevBorrarToken" name="clear_token" value="1">
+                                <label for="dnsrevBorrarToken">Borrar el token guardado</label>
+                            </div>
+                        @endif
                     </div>
 
                     <div class="form-group">
@@ -100,33 +100,32 @@
                     <h3 class="box-title">Que puede hacer el cliente</h3>
                 </div>
                 <div class="box-body">
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="active" value="1" {{ old('active', $domain->active) ? 'checked' : '' }}>
-                            <strong>Activo</strong>
-                        </label>
+                    {{-- Casillas con estilo propio (dnsreverse-checkfield).
+                         No se usa la clase "checkbox" del panel a proposito: su CSS
+                         deja el input con opacity:0 y dibuja la marca con
+                         "input:checked + label::after", usando ademas un icono de
+                         Font Awesome. Con la marca en un hermano, y con Arix sin
+                         cargar Font Awesome, la casilla se quedaba en blanco
+                         hicieras lo que hicieras. --}}
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevActive" name="active" value="1" {{ old('active', $domain->active) ? 'checked' : '' }}>
+                        <label for="dnsrevActive"><strong>Activo</strong></label>
                         <p class="text-muted small">
                             Si lo desmarcas, nadie podra pedir subdominios nuevos de este dominio.
                             <strong>Lo que ya esta creado sigue funcionando</strong>: no se borra nada.
                         </p>
                     </div>
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="allow_subdomain" value="1" {{ old('allow_subdomain', $domain->allow_subdomain) ? 'checked' : '' }}>
-                            Permitir subdominios (paginas web)
-                        </label>
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevSubdominios" name="allow_subdomain" value="1" {{ old('allow_subdomain', $domain->allow_subdomain) ? 'checked' : '' }}>
+                        <label for="dnsrevSubdominios">Permitir subdominios (paginas web)</label>
                     </div>
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="allow_srv" value="1" {{ old('allow_srv', $domain->allow_srv) ? 'checked' : '' }}>
-                            Permitir registros SRV de Minecraft
-                        </label>
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevSrv" name="allow_srv" value="1" {{ old('allow_srv', $domain->allow_srv) ? 'checked' : '' }}>
+                        <label for="dnsrevSrv">Permitir registros SRV de Minecraft</label>
                     </div>
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="allow_letsencrypt" value="1" {{ old('allow_letsencrypt', $domain->allow_letsencrypt) ? 'checked' : '' }}>
-                            Permitir certificados automaticos (Let's Encrypt)
-                        </label>
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevLetsencrypt" name="allow_letsencrypt" value="1" {{ old('allow_letsencrypt', $domain->allow_letsencrypt) ? 'checked' : '' }}>
+                        <label for="dnsrevLetsencrypt">Permitir certificados automaticos (Let's Encrypt)</label>
                     </div>
                 </div>
             </div>

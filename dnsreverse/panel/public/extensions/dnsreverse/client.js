@@ -31,6 +31,7 @@
         // Aviso que sobrevive al refresco de la lista, para que el cliente
         // llegue a leer que su dominio se creo bien.
         aviso: null,
+        ultimoAviso: null,
     };
 
     // --- Iconos -------------------------------------------------------------
@@ -120,8 +121,46 @@
      * y quedarse con el elemento que agrupa a mas de ellos, que es la barra
      * pase lo que pase con el maquetado.
      */
+    /**
+     * ¿Este elemento se ve de verdad en pantalla?
+     *
+     * offsetParent en null cubre display:none y todo lo que cuelgue de algo
+     * oculto; el tamano cubre los que estan a 0 o con visibility:hidden.
+     */
+    /**
+     * Deja constancia en la consola del navegador (F12) de donde se ha puesto
+     * la entrada. Si a alguien no le sale, esto dice si el problema es que el
+     * archivo no llega a cargarse o que no se reconocio el menu del tema.
+     */
+    function avisar(mensaje) {
+        if (estado.ultimoAviso === mensaje) {
+            return;
+        }
+
+        estado.ultimoAviso = mensaje;
+
+        try {
+            window.console.info('[DNS Reverse] ' + mensaje);
+        } catch (e) {
+            // Sin consola no pasa nada.
+        }
+    }
+
+    function esVisible(elemento) {
+        if (!elemento || elemento.offsetParent === null) {
+            return false;
+        }
+
+        var caja = elemento.getBoundingClientRect();
+
+        return caja.width > 0 && caja.height > 0;
+    }
+
     function barraDelServidor() {
-        var secciones = /^\/server\/[^/]+\/(files|databases|schedules|users|backups|network|startup|settings|activity)$/;
+        // Cualquier enlace a una seccion del servidor vale, se llame como se
+        // llame. Los temas cambian los nombres de las secciones, asi que no se
+        // exige una lista concreta: basta con /server/<id>/<algo>.
+        var seccion = /^\/server\/[^/]+\/[^/]+\/?$/;
         var candidatos = [];
         var conteos = [];
 
@@ -137,11 +176,30 @@
                 // Enlace raro: se usa tal cual.
             }
 
-            if (!secciones.test(ruta)) {
+            if (!seccion.test(ruta) || ruta.indexOf('/' + RUTA) !== -1) {
                 continue;
             }
 
+            // Un enlace escondido no sirve: muchos temas llevan ademas del
+            // menu normal un desplegable para movil con los mismos enlaces,
+            // oculto en pantalla grande. Si metieramos la entrada ahi, el
+            // cliente no la veria nunca.
+            if (!esVisible(enlaces[i])) {
+                continue;
+            }
+
+            // Se sube un nivel si el enlace va envuelto (algunos temas meten
+            // cada entrada dentro de un <li> o de un <div>). Se busca el
+            // ancestro que agrupe a varios enlaces de seccion.
             var padre = enlaces[i].parentElement;
+
+            for (var salto = 0; salto < 3 && padre; salto++) {
+                if (padre.querySelectorAll('a[href*="/server/"]').length > 1) {
+                    break;
+                }
+
+                padre = padre.parentElement;
+            }
 
             if (!padre) {
                 continue;
@@ -169,21 +227,66 @@
             }
         }
 
-        return candidatos[mejor];
+        // Un solo enlace no es una barra de navegacion: probablemente sea un
+        // enlace suelto de otra parte de la pagina.
+        return conteos[mejor] >= 2 ? candidatos[mejor] : null;
+    }
+
+    /**
+     * Boton flotante de reserva.
+     *
+     * Si no se encuentra la barra del servidor (un tema muy cambiado, o una
+     * version del panel que la dibuja de otra forma), la entrada tiene que
+     * aparecer igualmente: si no, el cliente se queda sin poder crear su DNS y
+     * no hay forma de que sepa que la funcion existe.
+     */
+    function ponerBotonFlotante() {
+        if (document.querySelector('[data-dnsrev-flotante]')) {
+            return;
+        }
+
+        var boton = document.createElement('button');
+        boton.setAttribute('type', 'button');
+        boton.setAttribute('data-dnsrev-flotante', '1');
+        boton.className = 'dnsrev-flotante';
+        boton.setAttribute('title', 'DNS Reverse: pon un dominio a tu servidor');
+        boton.innerHTML = icono('globe', 18) + '<span>DNS Reverse</span>';
+        boton.addEventListener('click', abrir);
+
+        document.body.appendChild(boton);
+    }
+
+    function quitarBotonFlotante() {
+        var boton = document.querySelector('[data-dnsrev-flotante]');
+
+        if (boton && boton.parentNode) {
+            boton.parentNode.removeChild(boton);
+        }
     }
 
     function ponerEntrada() {
         var servidor = servidorActual();
 
         if (!servidor) {
+            quitarBotonFlotante();
+            return;
+        }
+
+        if (document.querySelector('[data-dnsrev-nav]')) {
             return;
         }
 
         var barra = barraDelServidor();
 
-        if (!barra || barra.querySelector('[data-dnsrev-nav]')) {
+        if (!barra) {
+            // Sin barra reconocible, boton flotante para que nunca falte.
+            avisar('no se encontro la barra del servidor, se usa el boton flotante');
+            ponerBotonFlotante();
             return;
         }
+
+        quitarBotonFlotante();
+        avisar('entrada anadida a la barra del servidor');
 
         var referencia = barra.querySelector('a[href*="/server/"]');
         var enlace = document.createElement('a');
@@ -199,6 +302,19 @@
         });
 
         barra.appendChild(enlace);
+
+        // Ultima comprobacion: si despues de meterla la entrada no se ve (el
+        // tema la esconde, la barra tenia overflow oculto, lo que sea), se
+        // retira y se saca el boton flotante. Vale mas un boton feo que una
+        // funcion invisible.
+        if (!esVisible(enlace)) {
+            if (enlace.parentNode) {
+                enlace.parentNode.removeChild(enlace);
+            }
+
+            avisar('la barra encontrada estaba oculta, se usa el boton flotante');
+            ponerBotonFlotante();
+        }
     }
 
     // --- Pantalla -----------------------------------------------------------

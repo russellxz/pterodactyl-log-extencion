@@ -19,6 +19,41 @@
     gap: 6px;
 }
 
+/* Boton de reserva: solo sale cuando no se reconoce la barra del servidor del
+   tema instalado. Asi el cliente siempre tiene por donde entrar. */
+.dnsrev-flotante {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 8900;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 16px;
+    border: 0;
+    border-radius: 999px;
+    background: #ec4899;
+    color: #fff;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.dnsrev-flotante:hover {
+    background: #db2777;
+}
+
+@media (max-width: 640px) {
+    .dnsrev-flotante span {
+        display: none;
+    }
+
+    .dnsrev-flotante {
+        padding: 14px;
+    }
+}
+
 /* --- Hoja --------------------------------------------------------------- */
 
 body.dnsrev-open {

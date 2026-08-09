@@ -66,7 +66,7 @@
                             @php $limite = (int) ($servidor->proxy_limit ?? 0); @endphp
                             <tr class="{{ $limite === 0 ? 'dnsreverse-row-off' : '' }}">
                                 <td>
-                                    <a href="{{ route('admin.servers.view', $servidor->id) }}">{{ $servidor->name }}</a>
+                                    <a href="{{ \Pterodactyl\Extensions\DnsReverse\Support\PanelLinks::server($servidor->id) }}">{{ $servidor->name }}</a>
                                     <div class="text-muted small">{{ $servidor->uuidShort }}</div>
                                 </td>
                                 <td class="small">{{ optional($servidor->user)->username ?? '-' }}</td>

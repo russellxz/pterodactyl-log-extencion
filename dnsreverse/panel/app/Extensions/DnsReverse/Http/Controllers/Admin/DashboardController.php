@@ -78,26 +78,47 @@ class DashboardController extends Controller
         }
 
         // --- 2. Complemento de wings en los nodos ---
+        //
+        // Solo se mira lo que ya esta guardado en cache: dibujar el resumen no
+        // puede depender de que los nodos contesten. Si un nodo esta apagado y
+        // aqui se le preguntara por red, la pantalla tardaria hasta agotar el
+        // tiempo maximo de PHP y acabaria en un error 500. Quien comprueba de
+        // verdad es la pestana Nodos, desde el navegador y de uno en uno.
         $nodosSinComplemento = [];
+        $sinComprobar = 0;
 
         try {
             foreach (Node::all() as $nodo) {
-                $estado = WingsClient::for($nodo)->status();
+                $estado = WingsClient::for($nodo)->cachedStatus();
+
+                if ($estado === null) {
+                    $sinComprobar++;
+
+                    continue;
+                }
 
                 if (!$estado['online'] || $estado['version'] < WingsClient::VERSION_ESPERADA) {
                     $nodosSinComplemento[] = $nodo->name . ' (' . ($estado['message'] ?: 'sin respuesta') . ')';
                 }
             }
         } catch (\Throwable) {
-            // Sin acceso a los nodos no se puede avisar de esto.
+            // Sin acceso a la lista de nodos no se puede avisar de esto.
         }
 
         if ($nodosSinComplemento !== []) {
             $avisos[] = [
-                'nivel' => count($nodosSinComplemento) > 0 ? 'aviso' : 'ok',
+                'nivel' => 'aviso',
                 'titulo' => 'Hay nodos con wings sin actualizar',
                 'texto' => 'Nodos afectados: ' . implode(' | ', $nodosSinComplemento)
                     . '. En la pestana Nodos tienes el comando exacto para dejarlos al dia.',
+                'enlace' => route('admin.dnsreverse.nodes'),
+                'enlace_texto' => 'Ver nodos',
+            ];
+        } elseif ($sinComprobar > 0) {
+            $avisos[] = [
+                'nivel' => 'info',
+                'titulo' => 'Falta comprobar ' . $sinComprobar . ' nodo(s)',
+                'texto' => 'Todavia no se sabe si tienen el complemento de wings puesto. Entra en Nodos y se comprueban solos.',
                 'enlace' => route('admin.dnsreverse.nodes'),
                 'enlace_texto' => 'Ver nodos',
             ];

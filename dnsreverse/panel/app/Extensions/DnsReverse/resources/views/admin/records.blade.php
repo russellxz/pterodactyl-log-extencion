@@ -95,7 +95,7 @@
                                 <td class="small">{{ $registro->typeLabel() }}</td>
                                 <td>
                                     @if($registro->server)
-                                        <a href="{{ route('admin.servers.view', $registro->server->id) }}">{{ $registro->server->name }}</a>
+                                        <a href="{{ \Pterodactyl\Extensions\DnsReverse\Support\PanelLinks::server($registro->server->id) }}">{{ $registro->server->name }}</a>
                                     @else
                                         <span class="dnsreverse-pill dnsreverse-pill-warn">huerfano</span>
                                     @endif

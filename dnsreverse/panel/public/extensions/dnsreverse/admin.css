@@ -221,6 +221,59 @@
     background: rgba(148, 163, 184, 0.14);
 }
 
+/* --- Casillas ------------------------------------------------------------
+ *
+ * El panel (y Arix encima) esconden el <input type=checkbox> con opacity: 0 y
+ * dibujan la marca con "input:checked + label::after" usando un icono de Font
+ * Awesome. Con Arix, que no carga Font Awesome, esa marca no aparece NUNCA: la
+ * casilla se queda en blanco aunque este marcada de verdad.
+ *
+ * Aqui se usa la casilla nativa del navegador y se fuerza a ser visible con
+ * !important, para que no importe lo que haga el tema de turno.
+ */
+
+.dnsreverse-checkfield {
+    display: block;
+    margin: 0 0 12px;
+}
+
+.dnsreverse-checkfield input[type="checkbox"] {
+    -webkit-appearance: checkbox !important;
+    -moz-appearance: checkbox !important;
+    appearance: checkbox !important;
+    opacity: 1 !important;
+    position: static !important;
+    width: 16px !important;
+    height: 16px !important;
+    margin: 0 8px 0 0 !important;
+    padding: 0 !important;
+    vertical-align: -2px;
+    accent-color: var(--dnsreverse-acento);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* El tema dibuja su propio recuadro con ::before sobre el label. Se anula, que
+   si no salen dos cuadraditos. */
+.dnsreverse-checkfield label::before,
+.dnsreverse-checkfield label::after {
+    display: none !important;
+    content: none !important;
+}
+
+.dnsreverse-checkfield label {
+    display: inline;
+    margin: 0;
+    padding: 0 !important;
+    font-weight: normal;
+    cursor: pointer;
+    vertical-align: middle;
+}
+
+.dnsreverse-checkfield p {
+    margin: 4px 0 0 24px;
+}
+
 /* --- Filtros y formularios en linea ------------------------------------- */
 
 .dnsreverse-filters {

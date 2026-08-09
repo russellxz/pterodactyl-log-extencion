@@ -32,6 +32,16 @@ class WingsClient
 
     private const CACHE_MINUTOS = 5;
 
+    /**
+     * Segundos que se espera a un nodo al preguntarle el estado.
+     *
+     * Va MUY corto a proposito. Antes eran 30 segundos por peticion y, con dos
+     * peticiones por nodo, un solo nodo apagado se comia el tiempo maximo de
+     * ejecucion de PHP y la pantalla de Nodos moria con un error 500 en vez de
+     * decir simplemente "este nodo no responde".
+     */
+    private const TIMEOUT_ESTADO = 6;
+
     public function __construct(private Node $node)
     {
     }
@@ -55,7 +65,7 @@ class WingsClient
      */
     public function status(bool $refrescar = false): array
     {
-        $clave = 'dnsreverse:wings:' . $this->node->id;
+        $clave = $this->claveCache();
 
         if ($refrescar) {
             Cache::forget($clave);
@@ -64,6 +74,29 @@ class WingsClient
         return Cache::remember($clave, now()->addMinutes(self::CACHE_MINUTOS), function () {
             return $this->consultarEstado();
         });
+    }
+
+    /**
+     * Lo ultimo que se sabe del nodo, SIN salir a la red.
+     *
+     * Las pantallas del panel usan esto: dibujar una pagina no puede depender
+     * de que un nodo conteste. Si no hay nada guardado devuelve null y quien
+     * llama decide que enseñar (normalmente "sin comprobar" y un boton).
+     */
+    public function cachedStatus(): ?array
+    {
+        try {
+            $guardado = Cache::get($this->claveCache());
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_array($guardado) ? $guardado : null;
+    }
+
+    private function claveCache(): string
+    {
+        return 'dnsreverse:wings:' . $this->node->id;
     }
 
     private function consultarEstado(): array
@@ -78,7 +111,7 @@ class WingsClient
         ];
 
         try {
-            $respuesta = $this->request()->get($this->url('/api/dns-reverse/status'));
+            $respuesta = $this->request(self::TIMEOUT_ESTADO)->get($this->url('/api/dns-reverse/status'));
         } catch (\Throwable $e) {
             return array_merge($base, ['message' => 'No se pudo conectar con el nodo: ' . $e->getMessage()]);
         }
@@ -137,7 +170,7 @@ class WingsClient
     private function tieneRutaAntigua(): bool
     {
         try {
-            $respuesta = $this->request(15)->post(
+            $respuesta = $this->request(self::TIMEOUT_ESTADO)->post(
                 $this->url('/api/servers/00000000-0000-0000-0000-000000000000/proxy/delete'),
                 ['domain' => '', 'port' => '0']
             );
@@ -307,7 +340,7 @@ class WingsClient
             'Authorization' => 'Bearer ' . $this->node->getDecryptedKey(),
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
-        ])->timeout($segundos)->connectTimeout(10);
+        ])->timeout($segundos)->connectTimeout(min(5, $segundos));
     }
 
     private function mensajeDeError(\Illuminate\Http\Client\Response $respuesta): string
