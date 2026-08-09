@@ -27,12 +27,13 @@
                         </p>
                     </div>
 
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="allow_custom_domains" value="1"
-                                   {{ filter_var($ajustes['allow_custom_domains'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
-                            Permitir que los clientes traigan su propio dominio
-                        </label>
+                    {{-- Casillas con estilo propio: la clase "checkbox" del panel
+                         deja el input invisible y dibuja la marca con un icono de
+                         Font Awesome en un hermano, asi que nunca se veia marcada. --}}
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevDominiosPropios" name="allow_custom_domains" value="1"
+                               {{ filter_var($ajustes['allow_custom_domains'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        <label for="dnsrevDominiosPropios">Permitir que los clientes traigan su propio dominio</label>
                         <p class="text-muted small">
                             Si lo desmarcas, solo podran pedir subdominios de los dominios que tu hayas dado de alta.
                         </p>
@@ -45,19 +46,15 @@
                     <h3 class="box-title">Certificados automaticos (Let's Encrypt)</h3>
                 </div>
                 <div class="box-body">
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="letsencrypt_enabled" value="1"
-                                   {{ filter_var($ajustes['letsencrypt_enabled'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
-                            Ofrecer certificados automaticos a los clientes
-                        </label>
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevLeActivo" name="letsencrypt_enabled" value="1"
+                               {{ filter_var($ajustes['letsencrypt_enabled'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        <label for="dnsrevLeActivo">Ofrecer certificados automaticos a los clientes</label>
                     </div>
-                    <div class="checkbox">
-                        <label>
-                            <input type="checkbox" name="letsencrypt_auto_renew" value="1"
-                                   {{ filter_var($ajustes['letsencrypt_auto_renew'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
-                            Renovarlos solos antes de que caduquen
-                        </label>
+                    <div class="dnsreverse-checkfield">
+                        <input type="checkbox" id="dnsrevLeRenovar" name="letsencrypt_auto_renew" value="1"
+                               {{ filter_var($ajustes['letsencrypt_auto_renew'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
+                        <label for="dnsrevLeRenovar">Renovarlos solos antes de que caduquen</label>
                         <p class="text-muted small">
                             Estos certificados duran 90 dias. Sin renovacion automatica, las paginas de tus
                             clientes empiezan a dar error de seguridad a los tres meses.

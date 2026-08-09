@@ -520,13 +520,35 @@ php artisan route:clear && php artisan view:clear && php artisan config:clear
 Si sigue sin salir, recarga la pagina con Ctrl+F5: el menu lo dibuja un
 JavaScript que el navegador puede tener cacheado.
 
-### El cliente no ve la pestana DNS Reverse
+### El cliente no ve la entrada DNS Reverse
 
-- Comprueba que su servidor no tiene el limite a **0** (*Admin -> DNS Reverse ->
-  Limites*).
-- Comprueba que su tipo de servidor no esta en *Desactivado*
-  (*Admin -> DNS Reverse -> Tipos de servidor*).
-- Ctrl+F5 para tirar la cache del navegador.
+Primero: la entrada sale **dentro de un servidor**, en la barra de secciones
+(Consola, Archivos, Bases de datos...). En la lista de servidores no aparece,
+porque ahi todavia no se sabe de que servidor se trata.
+
+Si dentro de un servidor tampoco sale:
+
+1. **Ctrl+F5** para tirar la cache del navegador.
+2. Comprueba que el archivo llega: abre
+   `https://TU-PANEL/extensions/dnsreverse/client.js`. Tiene que salir codigo,
+   no un error 404. Si da 404, vuelve a lanzar `install.sh`.
+3. Comprueba que el limite de ese servidor no esta a **0**
+   (*Admin -> DNS Reverse -> Limites*).
+4. Comprueba que su tipo de servidor no esta en *Desactivado*
+   (*Admin -> DNS Reverse -> Tipos de servidor*).
+5. Abre la consola del navegador (**F12 -> Consola**). La extension deja escrito
+   ahi que ha hecho:
+   - `entrada anadida a la barra del servidor` &rarr; esta puesta; si no la ves,
+     mira mas a la derecha en la barra (se puede desplazar).
+   - `no se encontro la barra del servidor, se usa el boton flotante` &rarr; el
+     tema dibuja el menu de otra forma, asi que sale un **boton redondo abajo a
+     la derecha**. Funciona exactamente igual.
+   - Si no aparece **ningun** mensaje, el archivo no se esta cargando: repasa el
+     punto 2.
+
+Con temas muy modificados la entrada puede acabar en un menu que el tema
+esconde en pantallas grandes. La extension lo detecta y en ese caso saca el
+boton flotante, asi que **siempre hay una forma de entrar**.
 
 ### "El nodo no tiene instalado el complemento de wings"
 

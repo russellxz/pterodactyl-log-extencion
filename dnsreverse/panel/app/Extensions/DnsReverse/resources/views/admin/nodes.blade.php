@@ -19,6 +19,9 @@
                         cargaria. Se instala una vez por nodo y se actualiza con el mismo comando.
                     </p>
                 </div>
+                <button type="button" class="btn btn-sm btn-primary" onclick="dnsreverseComprobarTodos()">
+                    @dnsicon('refresh', 14) Comprobar todos
+                </button>
             </div>
         </div>
     </div>
@@ -40,34 +43,45 @@
                             </tr>
                         </thead>
                         <tbody>
-                        @foreach($nodos as $fila)
+                        @forelse($nodos as $fila)
                             @php $estado = $fila['estado']; @endphp
-                            <tr id="dnsreverse-node-{{ $fila['modelo']->id }}">
+                            <tr data-nodo="{{ $fila['modelo']->id }}">
                                 <td>
-                                    <a href="{{ route('admin.nodes.view', $fila['modelo']->id) }}">{{ $fila['modelo']->name }}</a>
+                                    <strong>{{ $fila['modelo']->name }}</strong>
                                     <div class="text-muted small">{{ $fila['modelo']->fqdn }}</div>
                                 </td>
-                                <td>
-                                    @if($estado['online'])
+
+                                {{-- Las tres columnas siguientes las rellena el JavaScript
+                                     cuando el nodo contesta. Si ya habia una comprobacion
+                                     reciente guardada, se pinta de entrada. --}}
+                                <td class="dnsreverse-col-estado">
+                                    @if($estado === null)
+                                        <span class="dnsreverse-pill">sin comprobar</span>
+                                    @elseif($estado['online'])
                                         <span class="dnsreverse-pill dnsreverse-pill-ok">responde</span>
                                     @else
                                         <span class="dnsreverse-pill dnsreverse-pill-error">sin respuesta</span>
                                     @endif
                                 </td>
-                                <td>
-                                    @if($estado['version'] >= $esperada)
+                                <td class="dnsreverse-col-version">
+                                    @if($estado === null)
+                                        <span class="text-muted small">-</span>
+                                    @elseif($estado['version'] >= $esperada)
                                         <span class="dnsreverse-pill dnsreverse-pill-ok">v{{ $estado['version'] }} al dia</span>
                                     @elseif($estado['version'] > 0)
                                         <span class="dnsreverse-pill dnsreverse-pill-warn">v{{ $estado['version'] }} antiguo</span>
                                     @else
                                         <span class="dnsreverse-pill dnsreverse-pill-error">no instalado</span>
                                     @endif
-                                    @if($estado['message'])
+
+                                    @if($estado !== null && $estado['message'])
                                         <div class="text-muted small">{{ $estado['message'] }}</div>
                                     @endif
                                 </td>
-                                <td>
-                                    @if($estado['nginx'])
+                                <td class="dnsreverse-col-nginx">
+                                    @if($estado === null)
+                                        <span class="text-muted small">-</span>
+                                    @elseif($estado['nginx'])
                                         <span class="dnsreverse-pill dnsreverse-pill-ok">ok</span>
                                     @elseif($estado['version'] >= $esperada)
                                         <span class="dnsreverse-pill dnsreverse-pill-error">falta</span>
@@ -75,24 +89,38 @@
                                         <span class="text-muted small">-</span>
                                     @endif
                                 </td>
+
                                 <td class="text-center">{{ $fila['dns'] }}</td>
-                                <td class="text-center">{{ count($estado['certs']) }}</td>
+                                <td class="text-center dnsreverse-col-certs">
+                                    {{ $estado === null ? '-' : count($estado['certs']) }}
+                                </td>
                                 <td class="text-right">
                                     <button type="button" class="btn btn-xs btn-default"
-                                            onclick="dnsreverseCheck({{ $fila['modelo']->id }})">
+                                            onclick="dnsreverseComprobar({{ $fila['modelo']->id }})">
                                         @dnsicon('refresh', 12) Comprobar
                                     </button>
-                                    @if($estado['version'] >= $esperada)
-                                        <button type="button" class="btn btn-xs btn-primary"
-                                                onclick="dnsreverseRenew({{ $fila['modelo']->id }})">
-                                            @dnsicon('lock', 12) Renovar certificados
-                                        </button>
-                                    @endif
+                                    <button type="button" class="btn btn-xs btn-primary dnsreverse-boton-renovar"
+                                            style="{{ ($estado !== null && $estado['version'] >= $esperada) ? '' : 'display:none;' }}"
+                                            onclick="dnsreverseRenovar({{ $fila['modelo']->id }})">
+                                        @dnsicon('lock', 12) Renovar certificados
+                                    </button>
                                 </td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center text-muted" style="padding: 24px;">
+                                    No hay nodos en el panel.
+                                </td>
+                            </tr>
+                        @endforelse
                         </tbody>
                     </table>
+                </div>
+                <div class="box-footer">
+                    <p class="text-muted small" style="margin: 0;">
+                        El estado de cada nodo se comprueba desde tu navegador, de uno en uno. Un nodo apagado
+                        solo retrasa su propia fila y no bloquea esta pantalla.
+                    </p>
                 </div>
             </div>
         </div>
@@ -116,10 +144,15 @@ sudo bash /opt/pterodactyl-log-extencion/dnsreverse/wings/install-wings.sh</pre>
 <pre class="dnsreverse-code">cd /opt/pterodactyl-log-extencion && git pull
 sudo bash dnsreverse/wings/install-wings.sh</pre>
                     <p class="text-muted small">
-                        El script descarga el codigo de wings de la misma version que tienes instalada, le anade
-                        el complemento, lo compila y reinicia el servicio. Antes de tocar nada guarda una copia
-                        del wings actual, asi que si algo sale mal se vuelve atras en un comando.
-                        <strong>No borra servidores ni configuraciones de nginx existentes.</strong>
+                        Si el script dice que <strong>no puede averiguar la version de wings</strong>, es porque ese
+                        wings ya esta compilado a mano. Indicasela: usa la misma serie que tu panel
+                        (panel 1.11.x &rarr; <code>v1.11.13</code>, 1.12.x &rarr; <code>v1.12.3</code>,
+                        1.13.x &rarr; <code>v1.13.2</code>).
+                    </p>
+<pre class="dnsreverse-code">sudo bash dnsreverse/wings/install-wings.sh --version v1.12.3</pre>
+                    <p class="text-muted small">
+                        El script guarda una copia del wings actual antes de tocar nada, asi que volver atras es
+                        un comando. <strong>No borra servidores ni configuraciones de nginx existentes.</strong>
                     </p>
                 </div>
             </div>
@@ -152,34 +185,126 @@ sudo bash dnsreverse/wings/install-wings.sh</pre>
 
 @section('dnsreverse-scripts')
 <script>
-function dnsreverseCheck(id) {
-    fetch('{{ url('admin/dnsreverse/nodes') }}/' + id + '/check', { credentials: 'same-origin' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-            alert('Complemento: v' + d.version + '\nnginx: ' + (d.nginx ? 'ok' : 'no')
-                + '\nCertificados: ' + (d.certs ? d.certs.length : 0)
-                + (d.message ? '\n\n' + d.message : ''));
-            window.location.reload();
-        })
-        .catch(function (e) { alert('No se pudo comprobar: ' + e); });
-}
+(function () {
+    'use strict';
 
-function dnsreverseRenew(id) {
-    if (!confirm('Se van a renovar los certificados automaticos que caduquen pronto en este nodo. Puede tardar un rato. ¿Seguir?')) {
-        return;
+    var BASE = @json(url('admin/dnsreverse/nodes'));
+    var CSRF = @json(csrf_token());
+    var ESPERADA = {{ $esperada }};
+
+    function fila(id) {
+        return document.querySelector('tr[data-nodo="' + id + '"]');
     }
 
-    fetch('{{ url('admin/dnsreverse/nodes') }}/' + id + '/renew', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-    }).then(function (r) { return r.json(); }).then(function (d) {
-        var texto = d.message || '';
-        if (d.renewed && d.renewed.length) { texto += '\n\nRenovados:\n' + d.renewed.join('\n'); }
-        if (d.failed && d.failed.length) { texto += '\n\nCon problemas:\n' + d.failed.join('\n'); }
-        alert(texto || 'Sin cambios.');
-    }).catch(function (e) { alert('No se pudo renovar: ' + e); });
-}
+    function pastilla(clase, texto) {
+        return '<span class="dnsreverse-pill ' + clase + '">' + texto + '</span>';
+    }
+
+    function escapar(valor) {
+        return String(valor === null || valor === undefined ? '' : valor)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function pintar(id, datos) {
+        var tr = fila(id);
+
+        if (!tr) {
+            return;
+        }
+
+        tr.querySelector('.dnsreverse-col-estado').innerHTML = datos.online
+            ? pastilla('dnsreverse-pill-ok', 'responde')
+            : pastilla('dnsreverse-pill-error', 'sin respuesta');
+
+        var version = datos.version >= ESPERADA
+            ? pastilla('dnsreverse-pill-ok', 'v' + datos.version + ' al dia')
+            : (datos.version > 0
+                ? pastilla('dnsreverse-pill-warn', 'v' + datos.version + ' antiguo')
+                : pastilla('dnsreverse-pill-error', 'no instalado'));
+
+        if (datos.message) {
+            version += '<div class="text-muted small">' + escapar(datos.message) + '</div>';
+        }
+
+        tr.querySelector('.dnsreverse-col-version').innerHTML = version;
+
+        tr.querySelector('.dnsreverse-col-nginx').innerHTML = datos.nginx
+            ? pastilla('dnsreverse-pill-ok', 'ok')
+            : (datos.version >= ESPERADA ? pastilla('dnsreverse-pill-error', 'falta') : '<span class="text-muted small">-</span>');
+
+        tr.querySelector('.dnsreverse-col-certs').textContent = (datos.certs || []).length;
+
+        var boton = tr.querySelector('.dnsreverse-boton-renovar');
+        if (boton) {
+            boton.style.display = datos.version >= ESPERADA ? '' : 'none';
+        }
+    }
+
+    function comprobando(id) {
+        var tr = fila(id);
+        if (tr) {
+            tr.querySelector('.dnsreverse-col-estado').innerHTML = pastilla('', 'comprobando...');
+        }
+    }
+
+    window.dnsreverseComprobar = function (id) {
+        comprobando(id);
+
+        return fetch(BASE + '/' + id + '/check', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) { pintar(id, d); })
+            .catch(function () {
+                var tr = fila(id);
+                if (tr) {
+                    tr.querySelector('.dnsreverse-col-estado').innerHTML =
+                        pastilla('dnsreverse-pill-error', 'no se pudo comprobar');
+                }
+            });
+    };
+
+    window.dnsreverseComprobarTodos = function () {
+        var filas = document.querySelectorAll('tr[data-nodo]');
+
+        // De uno en uno a proposito: si hay muchos nodos, lanzarlos todos a la
+        // vez satura tanto al navegador como al panel.
+        var i = 0;
+        (function siguiente() {
+            if (i >= filas.length) {
+                return;
+            }
+
+            var id = filas[i].getAttribute('data-nodo');
+            i++;
+            window.dnsreverseComprobar(id).then(siguiente);
+        })();
+    };
+
+    window.dnsreverseRenovar = function (id) {
+        if (!window.confirm('Se van a renovar los certificados automaticos que caduquen pronto en este nodo. Puede tardar un rato. ¿Seguir?')) {
+            return;
+        }
+
+        fetch(BASE + '/' + id + '/renew', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRF-TOKEN': CSRF, 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        }).then(function (r) { return r.json(); }).then(function (d) {
+            var texto = d.message || '';
+            if (d.renewed && d.renewed.length) { texto += '\n\nRenovados:\n' + d.renewed.join('\n'); }
+            if (d.failed && d.failed.length) { texto += '\n\nCon problemas:\n' + d.failed.join('\n'); }
+            window.alert(texto || 'Sin cambios.');
+        }).catch(function (e) { window.alert('No se pudo renovar: ' + e); });
+    };
+
+    // Al entrar se comprueban solos los que no tengan dato reciente.
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('tr[data-nodo]').forEach(function (tr) {
+            if (tr.querySelector('.dnsreverse-col-estado').textContent.indexOf('sin comprobar') !== -1) {
+                window.dnsreverseComprobar(tr.getAttribute('data-nodo'));
+            }
+        });
+    });
+})();
 </script>
 @endsection
