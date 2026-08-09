@@ -10,6 +10,7 @@ use Pterodactyl\Extensions\DnsReverse\Models\DnsDomain;
 use Pterodactyl\Extensions\DnsReverse\Models\ProxyRecord;
 use Pterodactyl\Extensions\DnsReverse\Services\CloudflareClient;
 use Pterodactyl\Extensions\DnsReverse\Services\WingsClient;
+use Pterodactyl\Extensions\DnsReverse\Support\ArixTheme;
 use Pterodactyl\Extensions\DnsReverse\Support\Settings;
 use Pterodactyl\Models\Node;
 
@@ -153,6 +154,7 @@ class DoctorCommand extends Command
 
         if ($inyectado && !$compilado) {
             $this->bien('Modo inyectado: el boton lo pone el panel, sin compilar nada');
+            $this->arix($compilado);
 
             return;
         }
@@ -160,6 +162,7 @@ class DoctorCommand extends Command
         if (!$inyectado && $compilado) {
             $this->bien('Modo nativo: el boton esta compilado dentro del panel');
             $this->aviso('Acuerdate de volver a compilar despues de cada actualizacion del panel (install-frontend.sh).');
+            $this->arix($compilado);
 
             return;
         }
@@ -169,12 +172,54 @@ class DoctorCommand extends Command
                 'Tus clientes NO ven la pantalla: el modo inyectado esta apagado y no hay nada compilado.',
                 'php artisan dnsreverse:ui inject   (o vuelve a lanzar install-frontend.sh)'
             );
+            $this->arix($compilado);
 
             return;
         }
 
         $this->aviso('El boton puede salir dos veces: hay codigo compilado y ademas el modo inyectado encendido.');
         $this->line('          arreglo: php artisan dnsreverse:ui native');
+        $this->arix($compilado);
+    }
+
+    /**
+     * El tema Arix va por su cuenta: el menu del cliente no sale de routes.ts
+     * sino de una lista de enlaces guardada en la base de datos. Aqui se
+     * comprueba que las dos mitades esten de acuerdo.
+     */
+    private function arix(bool $compilado): void
+    {
+        if (!ArixTheme::instalado()) {
+            return;
+        }
+
+        $enlace = ArixTheme::tieneEnlace();
+
+        if ($enlace && $compilado) {
+            $this->bien('Arix: enlace en su menu y ruta compilada, las dos mitades puestas');
+
+            return;
+        }
+
+        if ($enlace && !$compilado) {
+            $this->mal(
+                'Arix tiene el enlace en su menu pero la ruta no esta compilada: al pulsarlo saldria "no encontrado".',
+                'sudo bash install-frontend.sh   (o quita el enlace con php artisan dnsreverse:arix remove)'
+            );
+
+            return;
+        }
+
+        if (!$enlace && $compilado) {
+            $this->mal(
+                'La ruta esta compilada pero Arix no tiene el enlace en su menu, asi que el boton no se ve.',
+                'php artisan dnsreverse:arix add'
+            );
+
+            return;
+        }
+
+        // Ni enlace ni ruta: es lo normal en modo inyectado, no hay nada que decir.
     }
 
     private function dominios(): void

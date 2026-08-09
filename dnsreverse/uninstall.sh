@@ -157,6 +157,12 @@ fi
 # routes.ts ANTES de borrar los archivos. Si no, el siguiente "yarn build" del
 # panel fallaria buscando un componente que ya no existe.
 
+# El tema Arix guarda su menu en la base de datos, no en routes.ts, asi que su
+# enlace hay que quitarlo aparte (y antes de borrar el codigo, que es donde
+# vive el comando).
+php artisan dnsreverse:arix remove >/dev/null 2>&1 \
+    && ok "Enlace quitado del menu del tema Arix (si lo tenias)"
+
 RECOMPILAR=0
 
 if grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null \

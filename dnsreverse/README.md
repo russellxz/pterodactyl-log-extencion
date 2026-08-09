@@ -189,6 +189,7 @@ unico que cambia es de donde viene el boton.
 | Aguanta una actualizacion del panel | Si                             | No, hay que recompilar       |
 | Anade algo a las paginas del panel  | Si, una etiqueta al final      | No, nada                     |
 | Toca archivos del panel             | Ninguno                        | `resources/scripts/routers/routes.ts` |
+| Con el tema Arix                    | Igual, sin hacer nada          | Ademas se anade un enlace en su menu (se hace solo) |
 | Se instala en                       | 10 segundos                    | 5-10 minutos                 |
 
 **Cual elegir:** si no tienes ningun problema, dejalo como esta (inyectado): es
@@ -255,6 +256,60 @@ cd /var/www/pterodactyl && php artisan dnsreverse:ui
 `php artisan dnsreverse:doctor` tambien lo comprueba y avisa de los dos casos
 raros: modo nativo apuntado pero sin compilar (los clientes no ven nada), y los
 dos modos encendidos a la vez (el boton saldria dos veces).
+
+### Con el tema Arix
+
+Arix pone sus apartados de otra forma, y conviene saberlo:
+
+**El menu del cliente de Arix NO sale de `routes.ts`.** Sale de una lista de
+enlaces que el tema guarda en la base de datos (en la tabla `settings`, clave
+`settings::arix:links`), la misma que se edita en *Admin -> Arix -> Links*.
+`routes.ts` solo sirve para que la pagina exista; quien decide que botones se
+ven es esa lista.
+
+O sea que en Arix hacen falta **dos mitades**:
+
+| Mitad | Donde | Que hace |
+|---|---|---|
+| La ruta | `resources/scripts/routers/routes.ts` | que la pagina exista |
+| El enlace | `settings::arix:links` (base de datos) | que el boton se vea |
+
+`install-frontend.sh` detecta Arix y pone las dos solo. El enlace queda asi:
+
+```php
+[
+    'icon'       => 'HiOutlineGlobeAlt',   // icono de react-icons/hi
+    'name'       => 'DNS Reverse',
+    'url'        => '/dnsreverse',         // relativo a /server/{id}
+    'permission' => [],                    // vacio: lo ve todo el mundo
+    'nests' => [], 'eggs' => [], 'active' => true,
+]
+```
+
+Se anade al grupo **management**, junto a Archivos, Bases de datos y Red. Queda
+como un enlace mas del tema, asi que desde *Admin -> Arix -> Links* lo puedes
+mover de grupo, cambiarle el icono, el nombre o limitarlo a ciertos tipos de
+servidor. Y como todos los diseños del tema (barra lateral, pill, slim, iconos)
+y su buscador leen la misma lista, con eso sale en todos.
+
+Si ya tenias el menu personalizado, no se toca nada de lo tuyo: el enlace se
+anade al final del ultimo grupo y el resto se queda tal cual.
+
+Ponerlo o quitarlo a mano:
+
+```bash
+cd /var/www/pterodactyl
+php artisan dnsreverse:arix          # ver si esta puesto
+php artisan dnsreverse:arix add      # ponerlo
+php artisan dnsreverse:arix remove   # quitarlo
+```
+
+> **Ojo con `php artisan arix install`.** Ese comando del tema hace
+> `rsync` de sus archivos sobre el panel y recompila, asi que se lleva por
+> delante `routes.ts` (el enlace del menu sobrevive, porque esta en la base de
+> datos). Resultado: el boton se ve pero al pulsarlo sale "no encontrado".
+> `dnsreverse:doctor` te lo dice tal cual. Se arregla volviendo a lanzar
+> `install-frontend.sh`.
 
 ---
 
@@ -616,6 +671,9 @@ Todos se ejecutan desde la carpeta del panel (`cd /var/www/pterodactyl`).
 | `php artisan dnsreverse:ui` | Dice si el boton del cliente esta en modo inyectado o nativo. |
 | `php artisan dnsreverse:ui inject` | Vuelve al modo inyectado (sin compilar). Es la salida rapida. |
 | `php artisan dnsreverse:ui native` | Marca el modo nativo (solo si ya compilaste con `install-frontend.sh`). |
+| `php artisan dnsreverse:arix` | Con el tema Arix: dice si el enlace esta en su menu. |
+| `php artisan dnsreverse:arix add` | Anade el enlace al menu del tema Arix. |
+| `php artisan dnsreverse:arix remove` | Lo quita del menu del tema Arix. |
 
 Y los scripts, desde la carpeta del repositorio:
 
@@ -696,6 +754,19 @@ Despues:
    es que hayas actualizado el panel y la actualizacion se lo llevara.
 5. Si no puedes compilar ahora, vuelve al modo inyectado y lo tienes al
    instante: `php artisan dnsreverse:ui inject`.
+
+**Si usas el tema Arix**, hay una tercera posibilidad: que falte el enlace en
+*su* menu, que va por separado de la ruta.
+
+```bash
+php artisan dnsreverse:arix        # ¿esta puesto?
+php artisan dnsreverse:arix add    # ponerlo
+```
+
+Y si el boton **si se ve pero al pulsarlo sale "no encontrado"**, es lo
+contrario: el enlace esta pero la ruta no esta compilada. Pasa despues de
+`php artisan arix install`, que reemplaza `routes.ts`. Se arregla con
+`sudo bash dnsreverse/install-frontend.sh`.
 
 Mientras tanto, la pantalla siempre se puede abrir por la direccion directa:
 `https://TU-PANEL/server/ID-DEL-SERVIDOR/dnsreverse`
