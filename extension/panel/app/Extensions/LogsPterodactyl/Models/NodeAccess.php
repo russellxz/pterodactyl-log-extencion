@@ -6,17 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * Datos de acceso SSH a un nodo.
+ * Datos de acceso SSH a un nodo: IP, puerto, usuario y contrasena.
  *
- * El secreto (contrasena o clave privada) se cifra con la APP_KEY del panel
- * mediante el cast "encrypted", asi que en la base de datos nunca hay nada
- * legible. A la pantalla no se devuelve nunca: los campos son de solo
- * escritura y solo se dice si hay algo guardado o no.
+ * La contrasena se cifra con la APP_KEY del panel mediante el cast
+ * "encrypted", asi que en la base de datos nunca hay nada legible. A la
+ * pantalla no se devuelve nunca: el campo es de solo escritura y solo se dice
+ * si hay algo guardado o no.
  */
 class NodeAccess extends Model
 {
     public const AUTH_PASSWORD = 'password';
-    public const AUTH_KEY = 'key';
 
     protected $table = 'logspterodactyl_node_access';
 
@@ -38,25 +37,33 @@ class NodeAccess extends Model
      */
     protected $hidden = ['secret', 'passphrase'];
 
-    public function usesKey(): bool
+    /**
+     * Resumen de estado para la pantalla, sin nada sensible dentro.
+     *
+     * @return array<string, mixed>
+     */
+    public function resumen(): array
     {
-        return $this->auth_type === self::AUTH_KEY;
+        return [
+            'host' => $this->host,
+            'puerto' => $this->port,
+            'usuario' => $this->username,
+            'activo' => (bool) $this->enabled,
+            'arregla_solo' => (bool) $this->auto_fix,
+            'huella' => $this->fingerprint,
+            'ultima_buena' => $this->last_ok_at?->toDateTimeString(),
+            'ultima_revision' => $this->last_checked_at?->toDateTimeString(),
+            'ultimo_error' => $this->last_error,
+        ];
     }
 
     /**
-     * El secreto descifrado. Se aisla en un metodo para que sea facil de
-     * auditar quien lo pide.
+     * La contrasena descifrada. Se aisla en un metodo para que sea facil de
+     * auditar quien la pide.
      */
     public function plainSecret(): string
     {
         return (string) $this->secret;
-    }
-
-    public function plainPassphrase(): ?string
-    {
-        $valor = (string) $this->passphrase;
-
-        return $valor === '' ? null : $valor;
     }
 
     /**

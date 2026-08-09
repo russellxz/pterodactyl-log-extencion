@@ -2,6 +2,7 @@
 
 namespace Pterodactyl\Extensions\LogsPterodactyl\Http\Controllers\Admin;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\ExtensionEvent;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\InstallEvent;
@@ -55,36 +56,28 @@ class NodesController extends Controller
             'host' => 'required|string|max:255',
             'port' => 'required|integer|min:1|max:65535',
             'username' => 'required|string|max:64',
-            'auth_type' => 'required|in:password,key',
-            'secret' => 'nullable|string|max:20000',
-            'passphrase' => 'nullable|string|max:500',
+            'secret' => 'nullable|string|max:500',
         ]);
 
         $acceso = NodeAccess::query()->firstOrNew(['node_id' => $nodo->id]);
 
-        // El secreto solo se toca si han escrito uno nuevo: asi se puede
-        // cambiar el puerto o el usuario sin volver a teclear la contrasena.
+        // La contrasena solo se toca si han escrito una nueva: asi se puede
+        // cambiar el puerto o el usuario sin volver a teclearla.
         if (trim((string) $datos['secret']) === '' && !$acceso->exists) {
-            return back()->with('logspterodactyl_error', 'Hace falta la contrasena o la clave privada.');
+            return back()->with('logspterodactyl_error', 'Hace falta la contrasena SSH.');
         }
 
         $acceso->fill([
             'host' => trim($datos['host']),
             'port' => (int) $datos['port'],
             'username' => trim($datos['username']),
-            'auth_type' => $datos['auth_type'],
+            'auth_type' => NodeAccess::AUTH_PASSWORD,
             'enabled' => $request->boolean('enabled'),
             'auto_fix' => $request->boolean('auto_fix'),
         ]);
 
         if (trim((string) $datos['secret']) !== '') {
             $acceso->secret = $datos['secret'];
-            $acceso->passphrase = $datos['passphrase'] ?: null;
-
-            // Credencial nueva: la huella de antes puede que ya no valga.
-            if ($acceso->exists && $acceso->isDirty('auth_type')) {
-                $acceso->fingerprint = null;
-            }
         }
 
         $acceso->save();
@@ -93,11 +86,64 @@ class NodesController extends Controller
             'host' => $acceso->host,
             'puerto' => $acceso->port,
             'usuario' => $acceso->username,
-            'tipo' => $acceso->auth_type,
             'arreglo_automatico' => $acceso->auto_fix,
         ]);
 
-        return back()->with('logspterodactyl_success', 'Acceso guardado para "' . $nodo->name . '". Pruebalo antes de fiarte.');
+        return back()->with('logspterodactyl_success', 'Acceso guardado para "' . $nodo->name . '". Pulsa "Comprobar conexion" para ver si entra bien.');
+    }
+
+    /**
+     * Comprobacion de conexion en vivo, sin recargar la pagina.
+     *
+     * Devuelve todo lo que hace falta para pintar el semaforo: si entra, con
+     * que usuario, si docker responde y si wings esta corriendo.
+     */
+    public function check(Request $request, string $node): JsonResponse
+    {
+        $acceso = NodeAccess::query()->where('node_id', (int) $node)->first();
+
+        if (!$acceso) {
+            return new JsonResponse([
+                'ok' => false,
+                'estado' => 'sin_configurar',
+                'mensaje' => 'Este nodo todavia no tiene acceso guardado.',
+            ]);
+        }
+
+        $r = $this->ssh->test($acceso, false);
+
+        if (!$r['ok']) {
+            return new JsonResponse([
+                'ok' => false,
+                'estado' => $r['huella_nueva'] ? 'huella_cambiada' : 'error',
+                'mensaje' => $r['error'] ?: 'No se pudo conectar.',
+                'huella' => $r['huella'],
+                'revisado' => now()->format('H:i:s'),
+            ]);
+        }
+
+        // Se conecta, pero puede faltarle algo a la maquina.
+        $avisos = [];
+
+        if (($r['docker'] ?? 'no') === 'no') {
+            $avisos[] = 'docker no responde con este usuario (¿esta instalado? ¿el usuario tiene permiso?)';
+        }
+
+        if (($r['wings'] ?? '') !== 'active') {
+            $avisos[] = 'el servicio wings no esta activo (' . ($r['wings'] ?: 'desconocido') . ')';
+        }
+
+        return new JsonResponse([
+            'ok' => true,
+            'estado' => $avisos === [] ? 'conectado' : 'conectado_con_avisos',
+            'mensaje' => sprintf('Conectado a %s como %s.', $acceso->host, $r['usuario']),
+            'usuario' => $r['usuario'],
+            'docker' => $r['docker'] === 'no' ? null : $r['docker'],
+            'wings' => $r['wings'],
+            'huella' => $r['huella'],
+            'avisos' => $avisos,
+            'revisado' => now()->format('H:i:s'),
+        ]);
     }
 
     public function test(Request $request, string $node)
@@ -108,17 +154,19 @@ class NodesController extends Controller
             return back()->with('logspterodactyl_error', 'Ese nodo no tiene acceso configurado.');
         }
 
-        $resultado = $this->ssh->test($acceso, $request->boolean('confiar'));
+        $r = $this->ssh->test($acceso, $request->boolean('confiar'));
 
-        if (!$resultado['ok']) {
-            return back()->with('logspterodactyl_error', 'No se pudo conectar: ' . ($resultado['error'] ?: 'sin detalle.'));
+        if (!$r['ok']) {
+            return back()->with('logspterodactyl_error', 'No se pudo conectar: ' . ($r['error'] ?: 'sin detalle.'));
         }
 
         return back()->with('logspterodactyl_success', sprintf(
-            'Conectado a %s. Huella %s. Respuesta: %s',
+            'Conectado a %s como %s. Docker: %s. Wings: %s. Huella %s.',
             $acceso->host,
-            $resultado['huella'] ?: '?',
-            trim(preg_replace('/\s+/', ' ', $resultado['salida'])) ?: '(sin salida)'
+            $r['usuario'] ?: '?',
+            $r['docker'] === 'no' ? 'NO responde' : ($r['docker'] ?: '?'),
+            $r['wings'] ?: '?',
+            $r['huella'] ?: '?'
         ));
     }
 

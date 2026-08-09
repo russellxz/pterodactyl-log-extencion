@@ -56,6 +56,7 @@ Route::get('/resources/top', [Admin\ResourcesController::class, 'top'])->name('r
 Route::get('/nodes', [Admin\NodesController::class, 'index'])->name('nodes');
 Route::post('/nodes/{node}', [Admin\NodesController::class, 'save'])->name('nodes.save');
 Route::post('/nodes/{node}/test', [Admin\NodesController::class, 'test'])->name('nodes.test');
+Route::get('/nodes/{node}/check', [Admin\NodesController::class, 'check'])->name('nodes.check');
 Route::post('/nodes/{node}/forget', [Admin\NodesController::class, 'forget'])->name('nodes.forget');
 Route::post('/nodes/{node}/delete', [Admin\NodesController::class, 'destroy'])->name('nodes.delete');
 Route::post('/nodes/{node}/restart-wings', [Admin\NodesController::class, 'restartWings'])->name('nodes.restart');

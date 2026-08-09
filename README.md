@@ -12,7 +12,9 @@ actualizacion del panel con respaldo y vuelta atras.
 >
 > - **Acceso SSH a los nodos**: la extension entra en la maquina y suelta ella
 >   misma el bloqueo de instalacion de wings, en vez de limitarse a decirte que
->   comando ejecutar. Con boton manual o del todo automatico.
+>   comando ejecutar. Con boton manual o del todo automatico. Solo pide IP,
+>   usuario y contrasena, y trae un boton **Comprobar conexion** que te dice al
+>   momento si entra, con que usuario, y si docker y wings responden.
 > - **Sabe olvidar la huella SSH** cuando reinstalas la VPS, que si no la clave
 >   vieja impide conectar (el aviso de toda la vida de "REMOTE HOST
 >   IDENTIFICATION HAS CHANGED").
@@ -543,17 +545,22 @@ Pantalla **Nodos**. Aqui le das a la extension las credenciales de cada VPS para
 que pueda soltar ella misma el bloqueo de instalacion de wings, en vez de
 limitarse a decirte que comando ejecutar.
 
-Por nodo se guarda: host, puerto, usuario y **contrasena o clave privada**.
-Admite las dos, y la clave puede llevar su propia contrasena.
+Por nodo se guarda lo justo: **IP (o dominio), puerto, usuario y contrasena
+SSH**. Nada mas.
 
-Dos botones importantes:
+**Boton "Comprobar conexion"**: entra en la maquina en ese momento y te pinta el
+resultado ahi mismo, sin recargar la pagina. En verde si entra, y ademas te dice
+con que usuario ha entrado, **que version de docker** responde y **si el
+servicio wings esta activo**. En rojo, el motivo exacto (contrasena mal, puerto
+cerrado, la maquina no responde...). Uselo siempre despues de guardar.
 
-- **Probar conexion**: entra, ejecuta `id` y `docker version`, y te dice lo que
-  contesta la maquina. Hazlo siempre antes de fiarte.
-- **Arreglarlo solo**: si lo marcas, en cuanto se detecte que el nodo esta
-  rechazando instalaciones por tener el contenedor anterior colgado, la
-  extension entra, comprueba que sigue vivo y lo mata. Sin marcarlo, tienes el
-  boton **"Hacerlo por mi (SSH)"** en el aviso de *Instalaciones*.
+Si conecta pero falta algo, sale en naranja diciendo que falta: por ejemplo que
+ese usuario no puede usar docker, o que wings esta parado.
+
+**Casilla "arreglarlo solo"**: si la marcas, en cuanto se detecte que el nodo
+esta rechazando instalaciones por tener el contenedor anterior colgado, la
+extension entra, comprueba que sigue vivo y lo mata. Sin marcarla, tienes el
+boton **"Hacerlo por mi (SSH)"** en el aviso de *Instalaciones*.
 
 Tambien hay un **Reiniciar wings** para cuando ni matando el contenedor se
 arregla. Los servidores siguen encendidos; solo se corta la consola unos
@@ -563,9 +570,10 @@ segundos.
 
 Dar acceso SSH a una aplicacion web no es cualquier cosa, asi que:
 
-- La contrasena o la clave se guarda **cifrada** con la `APP_KEY` del panel.
-  En la base de datos no hay nada legible, y **no se devuelve nunca** a la
-  pantalla: el campo es de solo escritura y se deja vacio para no cambiarla.
+- La contrasena se guarda **cifrada** con la `APP_KEY` del panel. En la base de
+  datos no hay nada legible, y **no se devuelve nunca** a la pantalla: el campo
+  es de solo escritura y se deja vacio para no cambiarla (asi puedes cambiar el
+  puerto o el usuario sin volver a teclearla).
 - **No hay consola remota.** Los comandos no se escriben desde el panel: solo
   se pueden lanzar los tres concretos que necesita esto. El unico dato variable
   es el UUID de un servidor, que se valida como UUID antes de tocar nada, asi
@@ -574,10 +582,6 @@ Dar acceso SSH a una aplicacion web no es cualquier cosa, asi que:
   `sshpass` y sin contrasenas en la linea de comandos (donde las ve cualquiera
   con un `ps`).
 - Todo lo que se ejecuta en un nodo queda en la pestana **Registro**.
-
-Lo recomendable es una **clave privada** y un usuario dedicado, no el root con
-contrasena. Pero si lo mas comodo para ti es la contrasena de root, funciona
-igual.
 
 ### Cuando reinstalas la VPS
 
