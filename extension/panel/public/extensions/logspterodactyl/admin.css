@@ -719,3 +719,34 @@
 
 .logspterodactyl-diag ul { margin: 6px 0; padding-left: 20px; }
 .logspterodactyl-diag p { margin: 8px 0 0; }
+
+/* --- Semaforo de conexion de los nodos --- */
+
+.logspterodactyl-estado {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid rgba(127, 140, 160, .25);
+    border-radius: 8px;
+}
+
+.logspterodactyl-estado .logspterodactyl-resultado {
+    flex: 1 1 320px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.logspterodactyl-estado-bien {
+    color: #2f9e5f;
+}
+
+.logspterodactyl-estado-regular {
+    color: #d8912b;
+}
+
+.logspterodactyl-estado-mal {
+    color: #cf4436;
+}

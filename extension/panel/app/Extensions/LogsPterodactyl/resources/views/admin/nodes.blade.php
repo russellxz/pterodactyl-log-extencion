@@ -26,8 +26,8 @@
             instalacion. Con el acceso puesto aqui, la extension entra en la maquina y mata ese
             contenedor (solo ese: los archivos del servidor viven en otro sitio y no se tocan).
             <br><br>
-            La contrasena o la clave se guarda <strong>cifrada</strong> con la APP_KEY del panel y
-            no se vuelve a ensenar nunca. Y no hay consola remota: solo se pueden lanzar los tres
+            La contrasena se guarda <strong>cifrada</strong> con la APP_KEY del panel y no se
+            vuelve a ensenar nunca. Y no hay consola remota: solo se pueden lanzar los tres
             comandos concretos que necesita esto.
         </span>
     </div>
@@ -44,9 +44,6 @@
                         </h3>
                         <div class="box-tools">
                             @if($nodo['configurado'])
-                                @if($a->last_ok_at)
-                                    <span class="logspterodactyl-chip">ultima conexion buena: {{ $a->last_ok_at }}</span>
-                                @endif
                                 @if($a->auto_fix)
                                     <span class="logspterodactyl-chip">se arregla solo</span>
                                 @endif
@@ -60,11 +57,22 @@
                     </div>
 
                     <div class="box-body">
-                        @if($nodo['configurado'] && $a->last_error)
-                            <div class="logspterodactyl-note logspterodactyl-note-error">
-                                @logsicon('alert', 16)
-                                <span>
-                                    Ultimo fallo ({{ $a->last_checked_at }}): {{ $a->last_error }}
+                        @if($nodo['configurado'])
+                            {{-- Semaforo de conexion. Se rellena al pulsar el boton. --}}
+                            <div class="logspterodactyl-estado" data-node="{{ $nodo['id'] }}">
+                                <button type="button" class="btn btn-primary logspterodactyl-comprobar"
+                                        data-url="{{ route('admin.logspterodactyl.nodes.check', $nodo['id']) }}"
+                                        @if(!$disponible) disabled @endif>
+                                    @logsicon('activity', 14) Comprobar conexion
+                                </button>
+                                <span class="logspterodactyl-resultado logspterodactyl-muted">
+                                    @if($a->last_ok_at)
+                                        Ultima conexion buena: {{ $a->last_ok_at }}
+                                    @elseif($a->last_error)
+                                        Ultimo intento fallido: {{ $a->last_error }}
+                                    @else
+                                        Todavia no se ha probado.
+                                    @endif
                                 </span>
                             </div>
                         @endif
@@ -73,56 +81,35 @@
                             {{ csrf_field() }}
 
                             <div class="row">
-                                <div class="col-md-4 form-group">
-                                    <label>Host o IP</label>
+                                <div class="col-md-5 form-group">
+                                    <label>IP o dominio del nodo</label>
                                     <input type="text" name="host" class="form-control"
                                            value="{{ old('host', $a->host ?? $nodo['fqdn']) }}" required>
                                 </div>
-                                <div class="col-md-2 form-group">
+                                <div class="col-md-3 form-group">
                                     <label>Puerto SSH</label>
                                     <input type="number" name="port" class="form-control" min="1" max="65535"
                                            value="{{ old('port', $a->port ?? 22) }}" required>
                                 </div>
-                                <div class="col-md-3 form-group">
+                                <div class="col-md-4 form-group">
                                     <label>Usuario</label>
                                     <input type="text" name="username" class="form-control"
                                            value="{{ old('username', $a->username ?? 'root') }}" required>
-                                </div>
-                                <div class="col-md-3 form-group">
-                                    <label>Como entra</label>
-                                    <select name="auth_type" class="form-control">
-                                        <option value="password" @if(($a->auth_type ?? 'password') === 'password') selected @endif>
-                                            Contrasena
-                                        </option>
-                                        <option value="key" @if(($a->auth_type ?? '') === 'key') selected @endif>
-                                            Clave privada (mas seguro)
-                                        </option>
-                                    </select>
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <label>
-                                    Contrasena o clave privada
+                                    Contrasena SSH
                                     @if($nodo['configurado'])
                                         <span class="logspterodactyl-muted logspterodactyl-small">
                                             &mdash; ya hay una guardada. Dejalo vacio para no cambiarla.
                                         </span>
                                     @endif
                                 </label>
-                                <textarea name="secret" class="form-control" rows="3"
-                                          placeholder="{{ $nodo['configurado'] ? 'Sin cambios' : 'La contrasena, o el contenido entero del archivo de clave privada' }}"
-                                          autocomplete="new-password"></textarea>
-                                <p class="text-muted logspterodactyl-small" style="margin-top:6px;">
-                                    Si usas clave privada, pega el archivo entero, incluidas las lineas
-                                    <code>-----BEGIN ...-----</code> y <code>-----END ...-----</code>.
-                                </p>
-                            </div>
-
-                            <div class="form-group">
-                                <label>Contrasena de la clave privada (si la tiene)</label>
-                                <input type="password" name="passphrase" class="form-control"
-                                       autocomplete="new-password" placeholder="Solo si tu clave va con contrasena">
+                                <input type="password" name="secret" class="form-control"
+                                       autocomplete="new-password"
+                                       placeholder="{{ $nodo['configurado'] ? 'Sin cambios' : 'La contrasena de ese usuario en el nodo' }}">
                             </div>
 
                             <div class="form-group">
@@ -149,12 +136,6 @@
                         @if($nodo['configurado'])
                             <hr>
                             <div>
-                                <form method="POST" style="display:inline;"
-                                      action="{{ route('admin.logspterodactyl.nodes.test', $nodo['id']) }}">
-                                    {{ csrf_field() }}
-                                    <button type="submit" class="btn btn-default">Probar conexion</button>
-                                </form>
-
                                 <form method="POST" style="display:inline;"
                                       action="{{ route('admin.logspterodactyl.nodes.forget', $nodo['id']) }}"
                                       onsubmit="return confirm('Se olvidara la huella guardada de esta maquina. Hazlo solo si TU has reinstalado la VPS o cambiado su clave de servidor. ¿Continuar?');">
@@ -197,4 +178,75 @@
     @if($nodos === [])
         <p class="logspterodactyl-empty">No hay ningun nodo dado de alta en el panel.</p>
     @endif
+
+    <script>
+        (function () {
+            var botones = document.querySelectorAll('.logspterodactyl-comprobar');
+
+            function pintar(caja, clase, texto) {
+                var salida = caja.querySelector('.logspterodactyl-resultado');
+                salida.className = 'logspterodactyl-resultado ' + clase;
+                salida.innerHTML = texto;
+            }
+
+            function escapar(v) {
+                return String(v == null ? '' : v)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            }
+
+            for (var i = 0; i < botones.length; i++) {
+                botones[i].addEventListener('click', function () {
+                    var boton = this;
+                    var caja = boton.closest('.logspterodactyl-estado');
+
+                    boton.disabled = true;
+                    pintar(caja, 'logspterodactyl-muted', 'Conectando con el nodo...');
+
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', boton.getAttribute('data-url'), true);
+                    xhr.setRequestHeader('Accept', 'application/json');
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                    xhr.onload = function () {
+                        boton.disabled = false;
+                        var d = null;
+                        try { d = JSON.parse(xhr.responseText); } catch (e) { d = null; }
+
+                        if (!d) {
+                            pintar(caja, 'logspterodactyl-estado-mal',
+                                'No se pudo comprobar (respuesta del panel: ' + xhr.status + ').');
+                            return;
+                        }
+
+                        if (!d.ok) {
+                            pintar(caja, 'logspterodactyl-estado-mal',
+                                '<strong>Sin conexion.</strong> ' + escapar(d.mensaje));
+                            return;
+                        }
+
+                        var detalle = '<strong>Conectado.</strong> ' + escapar(d.mensaje)
+                            + ' <span class="logspterodactyl-small">Docker: ' + escapar(d.docker || 'no responde')
+                            + ' &middot; Wings: ' + escapar(d.wings || '?')
+                            + ' &middot; comprobado a las ' + escapar(d.revisado) + '</span>';
+
+                        if (d.avisos && d.avisos.length) {
+                            detalle += '<div class="logspterodactyl-small">Ojo: ' + escapar(d.avisos.join('. ')) + '.</div>';
+                        }
+
+                        pintar(caja, d.avisos && d.avisos.length
+                            ? 'logspterodactyl-estado-regular'
+                            : 'logspterodactyl-estado-bien', detalle);
+                    };
+
+                    xhr.onerror = function () {
+                        boton.disabled = false;
+                        pintar(caja, 'logspterodactyl-estado-mal', 'No se pudo hablar con el panel.');
+                    };
+
+                    xhr.send(null);
+                });
+            }
+        })();
+    </script>
 @endsection

@@ -4,7 +4,6 @@ namespace Pterodactyl\Extensions\LogsPterodactyl\Services;
 
 use Pterodactyl\Extensions\LogsPterodactyl\Models\ExtensionEvent;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\NodeAccess;
-use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SSH2;
 
 /**
@@ -44,13 +43,48 @@ class NodeSsh
     }
 
     /**
-     * Comprueba que se puede entrar y que docker responde.
+     * Revision completa del nodo: se entra, y se mira quien somos, si docker
+     * responde y si wings esta corriendo.
      *
-     * @return array{ok: bool, salida: string, error: ?string, huella: ?string, huella_nueva: bool}
+     * Es lo que hay detras del boton "Comprobar conexion": en una sola pasada
+     * te dice si el acceso vale y si la maquina esta como tiene que estar.
+     *
+     * @return array{
+     *     ok: bool, error: ?string, huella: ?string, huella_nueva: bool,
+     *     usuario: ?string, docker: ?string, wings: ?string, salida: string
+     * }
      */
     public function test(NodeAccess $access, bool $trustNewKey = false): array
     {
-        return $this->run($access, 'id -un; docker version --format "docker {{.Server.Version}}" 2>&1', $trustNewKey);
+        // Cada dato en su linea y con etiqueta, para poder leerlo sin adivinar.
+        $comando = implode('; ', [
+            'echo "USUARIO=$(id -un 2>/dev/null)"',
+            'echo "DOCKER=$(docker version --format \'{{.Server.Version}}\' 2>/dev/null || echo no)"',
+            'echo "WINGS=$(systemctl is-active wings 2>/dev/null || echo desconocido)"',
+        ]);
+
+        $r = $this->run($access, $comando, $trustNewKey);
+
+        $leer = function (string $clave) use ($r): ?string {
+            preg_match('/^' . $clave . '=(.*)$/m', $r['salida'], $m);
+            $valor = trim($m[1] ?? '');
+
+            return $valor === '' ? null : $valor;
+        };
+
+        $r['usuario'] = $leer('USUARIO');
+        $r['docker'] = $leer('DOCKER');
+        $r['wings'] = $leer('WINGS');
+
+        // El comando de arriba nunca falla aunque falten docker o wings, asi
+        // que "ok" solo significa que la conexion entro. Lo demas se informa
+        // aparte para poder decir exactamente que falta.
+        if ($r['ok'] && $r['usuario'] === null) {
+            $r['ok'] = false;
+            $r['error'] = 'Se conecto pero la maquina no contesto a nada. Revisa que ese usuario tenga una shell de verdad.';
+        }
+
+        return $r;
     }
 
     /**
@@ -193,25 +227,12 @@ class NodeSsh
                 }
             }
 
-            // 2) Autenticacion.
-            if ($access->usesKey()) {
-                try {
-                    $credencial = PublicKeyLoader::load($access->plainSecret(), $access->plainPassphrase() ?? false);
-                } catch (\Throwable $e) {
-                    // El "Unable to read key" pelado de phpseclib no le dice
-                    // nada a nadie, y casi siempre es una de estas dos cosas.
-                    throw new \RuntimeException(
-                        'No se pudo leer la clave privada. Comprueba que la pegaste entera (con las lineas '
-                        . 'BEGIN y END) y que la contrasena de la clave es la correcta.'
-                    );
-                }
-            } else {
-                $credencial = $access->plainSecret();
-            }
-
-            if (!$ssh->login($access->username, $credencial)) {
+            // 2) Autenticacion, siempre por contrasena.
+            if (!$ssh->login($access->username, $access->plainSecret())) {
                 throw new \RuntimeException(
-                    'Usuario o ' . ($access->usesKey() ? 'clave privada' : 'contrasena') . ' incorrectos.'
+                    'Usuario o contrasena incorrectos. Comprueba tambien que el servidor SSH admite '
+                    . 'entrar con contrasena (PasswordAuthentication yes) y, si entras como root, '
+                    . 'que lo permite (PermitRootLogin yes).'
                 );
             }
 
