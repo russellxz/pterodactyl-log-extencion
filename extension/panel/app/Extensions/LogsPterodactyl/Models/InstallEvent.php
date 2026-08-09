@@ -15,6 +15,25 @@ class InstallEvent extends Model
     public const STATUS_CANCELLED = 'cancelled';
     public const STATUS_TIMEOUT = 'timeout';
 
+    /**
+     * El nodo devolvio el fallo al instante despues de haberle parado a este
+     * mismo servidor otra instalacion. Casi siempre significa que wings sigue
+     * ocupado con el contenedor de instalacion anterior y ha rechazado esta:
+     * no es culpa de los datos del cliente y se arregla en el nodo.
+     */
+    public const DIAG_NODE_BUSY = 'nodo_ocupado';
+
+    /**
+     * Varios intentos seguidos que el nodo nunca llego a contestar.
+     */
+    public const DIAG_NODE_SILENT = 'nodo_sin_respuesta';
+
+    /**
+     * Fallo muy rapido, pero sin antecedentes que lo expliquen. Puede ser un
+     * script del egg que se rompe enseguida o una imagen que no se descarga.
+     */
+    public const DIAG_FAST_FAIL = 'fallo_rapido';
+
     protected $table = 'logspterodactyl_install_events';
 
     protected $guarded = ['id'];
@@ -60,5 +79,32 @@ class InstallEvent extends Model
     public function wasStoppedBySystem(): bool
     {
         return in_array($this->status, [self::STATUS_TIMEOUT, self::STATUS_CANCELLED], true);
+    }
+
+    /**
+     * ¿El problema esta en el nodo y no en los datos que puso el cliente?
+     */
+    public function blamesNode(): bool
+    {
+        return in_array($this->diagnosis, [self::DIAG_NODE_BUSY, self::DIAG_NODE_SILENT], true);
+    }
+
+    /**
+     * Comandos que hay que ejecutar EN EL NODO para soltar el bloqueo.
+     *
+     * Wings guarda el "estoy instalando" en su memoria y no expone ninguna
+     * orden para soltarlo (su API solo tiene power, commands, install,
+     * reinstall, sync y delete). Mientras el contenedor de instalacion
+     * anterior siga vivo, rechaza cualquier instalacion nueva de ese servidor.
+     * Se suelta matando ese contenedor, o reiniciando wings.
+     *
+     * @return array<int, string>
+     */
+    public function nodeCommands(): array
+    {
+        return [
+            'docker rm -f ' . ($this->server_uuid ?: '<uuid-del-servidor>') . '_installer',
+            'systemctl restart wings',
+        ];
     }
 }

@@ -143,6 +143,19 @@ if [ -d "$BACKUP_DIR" ]; then
         err "$WEB_USER no puede escribir en $BACKUP_DIR"
         printf '        Prueba: sudo chown -R %s:%s %s\n' "$WEB_USER" "$WEB_GROUP" "$BACKUP_DIR"
     fi
+
+    # Aqui van las copias de las OTRAS extensiones del panel, que se descargan
+    # desde la pantalla "Otras extensiones".
+    VAULT_DIR="$BACKUP_DIR/extensiones"
+    mkdir -p "$VAULT_DIR" 2>/dev/null
+    chown -R "$WEB_USER:$WEB_GROUP" "$VAULT_DIR" 2>/dev/null
+    chmod 700 "$VAULT_DIR" 2>/dev/null
+
+    if sudo -u "$WEB_USER" test -w "$VAULT_DIR" 2>/dev/null; then
+        ok "Carpeta de copias de extensiones escribible: $VAULT_DIR"
+    else
+        err "$WEB_USER no puede escribir en $VAULT_DIR"
+    fi
 else
     err "No se pudo crear $BACKUP_DIR"
     printf '        Creala a mano o cambia la ruta en la configuracion de la extension.\n'

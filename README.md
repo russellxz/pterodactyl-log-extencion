@@ -8,13 +8,39 @@ los correos que salen (y los que no), el envio de correos a los clientes, el
 consumo real de cada servidor con nombre y correo de su dueno, y la
 actualizacion del panel con respaldo y vuelta atras.
 
-> **Novedades de la 1.1.0.** Al parar una instalacion colgada ahora se cambia
-> **primero el estado de la instalacion** (el servidor se marca como
-> *instalado*, igual que con el boton **"Toggle Install Status"** del admin) y
-> **despues el puerto**. Ese era el paso que habia que dar a mano para que el
-> panel dejara de decir *Running Installer*; ya no hace falta. Ademas el
-> servidor queda vigilado unas horas por si el nodo avisa tarde y lo vuelve a
-> bloquear. Se actualiza con `sudo bash update.sh`.
+> **Novedades de la 1.3.0.** Se actualiza con `sudo bash update.sh`.
+>
+> - **Acceso SSH a los nodos**: la extension entra en la maquina y suelta ella
+>   misma el bloqueo de instalacion de wings, en vez de limitarse a decirte que
+>   comando ejecutar. Con boton manual o del todo automatico.
+> - **Sabe olvidar la huella SSH** cuando reinstalas la VPS, que si no la clave
+>   vieja impide conectar (el aviso de toda la vida de "REMOTE HOST
+>   IDENTIFICATION HAS CHANGED").
+> - Al cliente se le **sigue enseñando la lista** del token, el usuario y el
+>   repositorio privado aunque el nodo tenga la culpa: a veces las dos cosas
+>   estan mal a la vez.
+> - La tarjeta del cliente ya no hereda los colores del tema: **fondo opaco y
+>   contraste alto**, que habia textos grises que no se leian.
+>
+> **De la 1.2.0:**
+>
+> - **Las reinstalaciones se detectan al instante.** Antes se deducian cada
+>   minuto por las fechas del servidor y en uno que ya habia pasado por el
+>   problema salia mal: o la instalacion nueva parecia colgada desde el primer
+>   minuto, o se quedaba en cero para siempre y no saltaba nunca ni el corte
+>   automatico ni el boton del cliente.
+> - **Se detecta el nodo atascado.** Cuando wings rechaza una instalacion
+>   porque sigue ocupado con la anterior, el panel te lo dice con el comando
+>   exacto que hay que ejecutar, y al cliente se le explica que no es cosa
+>   suya en vez de mandarle a revisar un token que esta bien.
+> - **Copias de las otras extensiones** del panel, descargables, con
+>   restauracion en un boton. Se hacen solas antes de actualizar el panel.
+> - El registro de instalaciones funciona aunque el corte automatico este
+>   apagado (antes el interruptor apagaba las dos cosas).
+>
+> **De la 1.1.0:** al parar una instalacion colgada se cambia **primero el
+> estado** (el servidor se marca como *instalado*, igual que con el boton
+> **"Toggle Install Status"** del admin) y **despues el puerto**.
 
 ---
 
@@ -26,6 +52,8 @@ actualizacion del panel con respaldo y vuelta atras.
 - [Permisos](#permisos)
 - [Desinstalacion](#desinstalacion)
 - [Que trae](#que-trae)
+- [Cuando el problema esta en el nodo](#cuando-el-problema-esta-en-el-nodo-y-no-en-el-cliente)
+- [Acceso SSH a los nodos](#acceso-ssh-a-los-nodos)
 - [Comandos](#comandos)
 - [Si algo va mal](#si-algo-va-mal)
 
@@ -154,6 +182,7 @@ Que hace exactamente:
 | `public/extensions/logspterodactyl/logos` | escribible | logo de los correos |
 | `storage` y `bootstrap/cache` | dueno del servidor web, `755` | receta oficial de Pterodactyl |
 | `/var/backups/logspterodactyl` | dueno del servidor web, `700` | respaldos antes de actualizar |
+| `/var/backups/logspterodactyl/extensiones` | dueno del servidor web, `700` | copias de las otras extensiones |
 
 Ademas comprueba de verdad, escribiendo como el usuario del servidor web, que
 cada carpeta es accesible, y avisa si falta el cron.
@@ -299,6 +328,63 @@ cliente ve el fallo como siempre; eso no se tapa.
 El sistema automatico, el boton del cliente y el boton del admin hacen
 exactamente lo mismo.
 
+#### Cuando el problema esta en el nodo y no en el cliente
+
+Este es el caso raro que vuelve loco a cualquiera: paras la instalacion, el
+cliente corrige sus datos, le da a *Reinstalar*... y no pasa nada. O el panel
+ni se entera, o se queda "instalando" para siempre, o falla al segundo. Y
+puedes repetirlo diez veces con el mismo resultado.
+
+No es cosa del panel ni de los datos del cliente. **Es wings.** Guarda en su
+memoria un "estoy instalando" por servidor y no lo suelta hasta que el
+contenedor de instalacion termina:
+
+```go
+// server/install.go de wings
+if !ip.Server.installing.SwapIf(true) {
+    return errors.New("install: cannot obtain installation lock")
+}
+```
+
+Si aquel contenedor se quedo colgado (repositorio privado, un `apt` esperando
+una respuesta, una descarga que no avanza), ese bloqueo no se suelta nunca, y
+entonces:
+
+- Una **reinstalacion** se rechaza al instante y wings le dice al panel que
+  fallo. Visto desde fuera parece que el cliente volvio a poner mal el token.
+- O wings ni siquiera llega a contestar y el servidor se queda en "instalando"
+  hasta que el corte automatico lo para otra vez. Y otra. Y otra.
+
+Wings **no tiene ninguna orden para cancelar una instalacion en marcha** (su
+API entera es `power`, `commands`, `install`, `reinstall`, `sync`, `delete`, y
+`power` se rechaza mientras instala), asi que esto no se puede arreglar desde
+el panel por mucho que quiera la extension. Lo que si hace la extension:
+
+1. **Lo detecta.** Un fallo que llega en menos de 20 segundos justo despues de
+   una parada es la firma inconfundible de ese bloqueo.
+2. **Lo arregla ella misma**, si le has dado el acceso SSH del nodo (ver
+   [Acceso SSH a los nodos](#acceso-ssh-a-los-nodos)). Entra, comprueba que el
+   contenedor sigue vivo y lo mata. Puede hacerlo sola en cuanto lo detecta, o
+   esperar a que le des al boton **"Hacerlo por mi (SSH)"**.
+3. **Y si no hay acceso configurado, te dice el comando exacto**, arriba del
+   todo en *Instalaciones*, con el UUID del servidor ya puesto:
+
+   ```bash
+   docker rm -f <uuid-del-servidor>_installer   # mata el contenedor colgado
+   systemctl restart wings                      # si aun asi sigue igual
+   ```
+
+   No borra nada del servidor: solo el contenedor de instalacion.
+4. **No deja al cliente bloqueado** por un problema que no es suyo: le
+   desbloquea el servidor igualmente.
+5. **Le avisa, pero sin quitarle la lista de comprobacion.** Le sale un
+   *"puede que esta vez no sea cosa tuya, ya lo estamos mirando"* **encima** de
+   la lista del token, el usuario y el repositorio, no en su lugar: que el nodo
+   estuviera ocupado no quita que ademas haya puesto mal el token, y si se le
+   esconde la lista no revisa nada y vuelve a fallar.
+
+El aviso desaparece solo en cuanto ese servidor consigue instalarse.
+
 ### 3. Seguimiento de los reintentos
 
 Cada instalacion lleva su **numero de intento** y queda enlazada con la
@@ -360,7 +446,47 @@ registro no deja un token de acceso a la vista.
 - Se manda **uno por uno**, asi ningun cliente ve la direccion de los demas.
 - Cada envio queda agrupado como campana: cuantos salieron y cuantos fallaron.
 
-### 6. Actualizar el panel
+### 6. Copias de las otras extensiones
+
+Pantalla **Otras extensiones**. Detecta lo que tengas instalado en el panel
+aparte de esta extension:
+
+- `app/Extensions/<Nombre>` (extensiones con codigo propio)
+- `public/extensions/<nombre>` (sus js, css e imagenes)
+- `.blueprint/extensions/<nombre>` (las instaladas con **Blueprint**, que es
+  como viene la mayoria de addons de pago)
+- y las **lineas de proveedor** de `config/app.php`
+
+Ese ultimo punto es el importante: actualizar Pterodactyl trae su propio
+`config/app.php` y **se lleva por delante esas lineas**. Las carpetas de la
+extension siguen ahi, pero el panel deja de cargarla y parece que ha
+desaparecido. Por eso se guardan aparte y se te enseñan para que las vuelvas a
+pegar.
+
+Con un boton se hace un **zip descargable** de las que marques. Dentro va cada
+archivo con la misma ruta que tenia en el panel, un `manifest.json` y un
+`LEEME.txt` con las instrucciones para restaurarlo a mano si algun dia no
+tienes el panel delante. Se salta `node_modules`, `vendor` y `.git`, que se
+reinstalan solos y pesan mas que todo lo demas junto.
+
+Despues de actualizar el panel, **Restaurar** vuelve a dejar cada archivo en su
+sitio. Las lineas de proveedor no se escriben solas a proposito: se te enseñan
+para que las pongas tu, porque meter codigo a ciegas en `config/app.php` es la
+mejor forma de dejar el panel en blanco.
+
+**La copia se hace sola** al lanzar una actualizacion del panel desde la
+extension, antes de tocar nada. Si aun asi prefieres hacerla a mano, hazla
+antes de darle a actualizar.
+
+Tambien puedes **quitar** una extension desde aqui. Siempre guarda una copia
+antes de borrar nada, y te dice que linea de `config/app.php` te queda por
+limpiar. Lo que esa extension hubiera cambiado dentro de archivos del propio
+panel no se puede deshacer desde aqui, y la pantalla lo avisa.
+
+> Necesita la extension `zip` de PHP, que Pterodactyl ya exige de serie. Si
+> faltara: `apt install php8.3-zip` (con tu version de PHP) y reinicia PHP-FPM.
+
+### 7. Actualizar el panel
 
 Comprueba la ultima version publicada de Pterodactyl y la instala **sin perder
 el tema Arix**: respaldo completo (archivos + base de datos), descarga y
@@ -408,6 +534,70 @@ eso esta el respaldo.
 Otro detalle: el tema trae su propio `config/app.php` con la version del panel
 escrita a mano, asi que al restaurarlo el panel diria que sigue en la version
 vieja. La extension corrige esa linea y deja el resto intacto.
+
+---
+
+## Acceso SSH a los nodos
+
+Pantalla **Nodos**. Aqui le das a la extension las credenciales de cada VPS para
+que pueda soltar ella misma el bloqueo de instalacion de wings, en vez de
+limitarse a decirte que comando ejecutar.
+
+Por nodo se guarda: host, puerto, usuario y **contrasena o clave privada**.
+Admite las dos, y la clave puede llevar su propia contrasena.
+
+Dos botones importantes:
+
+- **Probar conexion**: entra, ejecuta `id` y `docker version`, y te dice lo que
+  contesta la maquina. Hazlo siempre antes de fiarte.
+- **Arreglarlo solo**: si lo marcas, en cuanto se detecte que el nodo esta
+  rechazando instalaciones por tener el contenedor anterior colgado, la
+  extension entra, comprueba que sigue vivo y lo mata. Sin marcarlo, tienes el
+  boton **"Hacerlo por mi (SSH)"** en el aviso de *Instalaciones*.
+
+Tambien hay un **Reiniciar wings** para cuando ni matando el contenedor se
+arregla. Los servidores siguen encendidos; solo se corta la consola unos
+segundos.
+
+### Como esta protegido
+
+Dar acceso SSH a una aplicacion web no es cualquier cosa, asi que:
+
+- La contrasena o la clave se guarda **cifrada** con la `APP_KEY` del panel.
+  En la base de datos no hay nada legible, y **no se devuelve nunca** a la
+  pantalla: el campo es de solo escritura y se deja vacio para no cambiarla.
+- **No hay consola remota.** Los comandos no se escriben desde el panel: solo
+  se pueden lanzar los tres concretos que necesita esto. El unico dato variable
+  es el UUID de un servidor, que se valida como UUID antes de tocar nada, asi
+  que no hay forma de colar `; rm -rf /` ni parecidos.
+- Se usa **phpseclib**, que ya viene con Pterodactyl. Sin `exec()`, sin
+  `sshpass` y sin contrasenas en la linea de comandos (donde las ve cualquiera
+  con un `ps`).
+- Todo lo que se ejecuta en un nodo queda en la pestana **Registro**.
+
+Lo recomendable es una **clave privada** y un usuario dedicado, no el root con
+contrasena. Pero si lo mas comodo para ti es la contrasena de root, funciona
+igual.
+
+### Cuando reinstalas la VPS
+
+Al reinstalar una maquina le cambia su clave de servidor. Con la vieja
+guardada, cualquier conexion se rechaza: es el aviso de toda la vida de
+*REMOTE HOST IDENTIFICATION HAS CHANGED*, el que obliga a editar el
+`known_hosts` a mano.
+
+La extension guarda esa huella (en el mismo formato `SHA256:...` que enseña
+`ssh-keygen -l`) y la comprueba en cada conexion. Si cambia:
+
+- **No se conecta.** Manda credenciales a una maquina que no es la que era, ni
+  de broma.
+- Te lo dice con las dos huellas, la vieja y la nueva.
+- Y tienes el boton **Olvidar huella**: la borra y la proxima conexion acepta
+  la clave nueva y la guarda. Es el `ssh-keygen -R` de siempre, pero sin
+  acordarte de el.
+
+Si tu no has tocado esa maquina y la huella cambia, no la olvides: eso no es
+una reinstalacion, es alguien poniendose en medio.
 
 ---
 
@@ -514,6 +704,45 @@ Un servidor desbloqueado sale como `(instalado / sin estado)`.
 
 Comprueba que esta activado en Configuracion y que el cron del panel corre.
 `logspterodactyl:doctor` avisa si no hay muestras recientes.
+
+### El cliente le da a "Reinstalar" y no pasa nada
+
+Mira arriba del todo en **Instalaciones**: si sale el aviso rojo de nodo
+atascado, no es cosa del panel. Wings sigue ocupado con el contenedor de
+instalacion anterior y rechaza cualquier instalacion nueva de ese servidor.
+
+Si tienes el acceso SSH puesto ([Nodos](#acceso-ssh-a-los-nodos)), pulsa
+**"Hacerlo por mi (SSH)"** en ese mismo aviso y listo. Si no, ahi tienes el
+comando con el UUID ya puesto para ejecutarlo tu:
+
+```bash
+docker rm -f <uuid-del-servidor>_installer
+```
+
+Esta explicado en detalle en
+[Cuando el problema esta en el nodo](#cuando-el-problema-esta-en-el-nodo-y-no-en-el-cliente).
+
+### "REMOTE HOST IDENTIFICATION HAS CHANGED" al conectar con un nodo
+
+Has reinstalado esa VPS y su clave de servidor es otra. En **Nodos**, boton
+**Olvidar huella**, y vuelve a probar. Si TU no has tocado esa maquina, no lo
+hagas: mirala antes.
+
+### El sistema no detecta que un servidor se esta reinstalando
+
+Desde la 1.2.0 la extension se entera en el mismo momento en que el panel
+cambia el estado del servidor, sin esperar al cron. Si aun asi no lo ves:
+
+1. Entra en **Instalaciones**. Cuando la lista de "instalando ahora mismo"
+   sale vacia, debajo aparece el recuento de servidores por estado leido de la
+   base de datos. Si ahi no hay ninguno en `installing`, es que el panel no ha
+   llegado a marcarlo (mira el aviso de nodo atascado).
+2. Comprueba que sigues con la extension actualizada: `sudo bash update.sh` y
+   despues `php artisan logspterodactyl:doctor`.
+
+Ojo con una cosa que cambio: el interruptor del corte automatico **ya no apaga
+el registro**. Antes, con el corte desactivado, la extension no anotaba
+ninguna instalacion ni ninguna reinstalacion.
 
 ### No aparece el aviso al cliente
 

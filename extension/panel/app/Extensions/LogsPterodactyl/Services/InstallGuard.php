@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\ExtensionEvent;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\InstallEvent;
+use Pterodactyl\Extensions\LogsPterodactyl\Models\NodeAccess;
 use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
 use Pterodactyl\Models\Server;
 use Pterodactyl\Repositories\Wings\DaemonServerRepository;
@@ -480,6 +481,80 @@ class InstallGuard
     }
 
     /**
+     * Un servidor acaba de entrar en "instalando".
+     *
+     * Esto se llama en el momento exacto en que el panel cambia el estado, asi
+     * que la hora de arranque queda anotada al segundo. Es lo que hace que el
+     * sistema se entere de las reinstalaciones sin depender de adivinarlo por
+     * las fechas del servidor: `created_at` puede ser de hace tres dias y
+     * `updated_at` lo toca cualquier cosa, y con cualquiera de los dos el
+     * calculo salia mal (o la instalacion nueva parecia colgada desde el
+     * primer minuto, o se quedaba en cero para siempre y no saltaba nunca ni
+     * el corte automatico ni el boton del cliente).
+     */
+    public function beginInstall(Server $server): ?InstallEvent
+    {
+        if ($server->status !== Server::STATUS_INSTALLING) {
+            return null;
+        }
+
+        // Si habia una fila abierta de un intento anterior, se cierra: el
+        // servidor acaba de entrar en instalacion otra vez, asi que aquello
+        // termino aunque nadie llegara a anotar como.
+        $colgada = $this->openEventFor($server);
+
+        if ($colgada) {
+            $inicio = $colgada->started_at
+                ? CarbonImmutable::parse($colgada->started_at)
+                : CarbonImmutable::now();
+
+            $colgada->fill([
+                'status' => InstallEvent::STATUS_FAILED,
+                'finished_at' => now(),
+                'duration_seconds' => (int) $inicio->diffInSeconds(CarbonImmutable::now()),
+                'notes' => $colgada->notes
+                    ?: 'No se llego a saber como termino: el servidor volvio a entrar en instalacion.',
+            ])->save();
+        }
+
+        return $this->openInstallEvent($server, $server->installed_at !== null, CarbonImmutable::now());
+    }
+
+    /**
+     * Punto de entrada unico para los cambios de estado de un servidor.
+     *
+     * Lo llama el observador del modelo, asi que el historial se lleva al dia
+     * al momento y no cada minuto cuando pasa el cron.
+     */
+    public function handleStatusChange(Server $server): void
+    {
+        if ($server->status === Server::STATUS_INSTALLING) {
+            $this->beginInstall($server);
+            $this->unblockIfGuarded($server);
+
+            return;
+        }
+
+        // Ha salido de "instalando": primero se cierra la fila con lo que diga
+        // el panel (que es la verdad de como acabo) y despues se mira si hay
+        // que devolverlo a "instalado".
+        $cerrado = $this->closeFor($server);
+
+        // Si el fallo lo ha provocado el nodo (sigue ocupado con la
+        // instalacion anterior y ha rechazado esta), el cliente no tiene
+        // ninguna culpa y no se le deja el servidor bloqueado: se desbloquea y
+        // se vuelve a vigilar. Un fallo de verdad si se le ensena, faltaria
+        // mas, porque ahi si tiene algo que corregir.
+        if ($cerrado?->diagnosis === InstallEvent::DIAG_NODE_BUSY && $this->isBlocked($server)) {
+            if ($this->markInstalled($server)) {
+                $this->armUnblockGuard($cerrado);
+            }
+        }
+
+        $this->unblockIfGuarded($server);
+    }
+
+    /**
      * Fila de historial abierta para este servidor, si la hay.
      */
     public function openEventFor(Server $server): ?InstallEvent
@@ -496,17 +571,19 @@ class InstallGuard
      *
      * Es idempotente y no toca nada si el servidor sigue instalando, asi que
      * se puede llamar tantas veces como haga falta.
+     *
+     * @return InstallEvent|null la fila que se acaba de cerrar, si habia alguna
      */
-    public function closeFor(Server $server): void
+    public function closeFor(Server $server): ?InstallEvent
     {
         if ($server->status === Server::STATUS_INSTALLING) {
-            return;
+            return null;
         }
 
         $event = $this->openEventFor($server);
 
         if (!$event) {
-            return;
+            return null;
         }
 
         $failed = in_array($server->status, [
@@ -516,15 +593,37 @@ class InstallGuard
 
         $started = $event->started_at ? CarbonImmutable::parse($event->started_at) : CarbonImmutable::now();
 
+        // Distinguir una instalacion que acabo bien de un desbloqueo a mano.
+        // Las dos dejan el servidor "instalado", pero solo cuando el nodo
+        // informa de verdad se rellena installed_at (el panel escribe estado e
+        // installed_at en el mismo guardado). Sin eso, lo que ha pasado es que
+        // alguien le ha dado al boton "Toggle Install Status", y apuntarlo como
+        // instalacion correcta falsearia el seguimiento de los reintentos.
+        $completada = $server->installed_at !== null
+            && CarbonImmutable::parse($server->installed_at)->greaterThanOrEqualTo($started->subMinute());
+
+        if ($failed) {
+            $estado = InstallEvent::STATUS_FAILED;
+            $nota = 'El nodo informo de que la instalacion fallo.';
+            $this->diagnoseFailure($event, $started);
+        } elseif ($completada) {
+            $estado = InstallEvent::STATUS_SUCCESS;
+            $nota = 'Instalacion completada.';
+        } else {
+            $estado = InstallEvent::STATUS_CANCELLED;
+            $nota = 'Desbloqueada a mano desde el panel: el nodo nunca llego a informar de que terminara.';
+        }
+
         $event->fill([
-            'status' => $failed ? InstallEvent::STATUS_FAILED : InstallEvent::STATUS_SUCCESS,
+            'status' => $estado,
+            'cancelled_by' => $event->cancelled_by ?: ($estado === InstallEvent::STATUS_CANCELLED ? 'panel (a mano)' : null),
             'finished_at' => now(),
             'duration_seconds' => (int) $started->diffInSeconds(CarbonImmutable::now()),
             'new_allocation' => $event->new_allocation ?: $this->ports->label($server->allocation),
-            'notes' => $event->notes ?: ($failed
-                ? 'El nodo informo de que la instalacion fallo.'
-                : 'Instalacion completada.'),
+            'notes' => $event->notes ?: $nota,
         ])->save();
+
+        return $event;
     }
 
     /**
@@ -580,6 +679,24 @@ class InstallGuard
     {
         $event = $this->openEventFor($server) ?? $this->openInstallEvent($server, $server->installed_at !== null);
 
+        // Un servidor al que hay que pararle la instalacion una y otra vez sin
+        // que el nodo diga nunca nada es la otra cara del mismo problema: el
+        // contenedor de instalacion sigue colgado alli y no deja trabajar.
+        $anterior = $event->previous();
+
+        if ($anterior !== null && $anterior->wasStoppedBySystem()) {
+            $event->diagnosis = InstallEvent::DIAG_NODE_SILENT;
+
+            ExtensionEvent::log('warning', 'installs', sprintf(
+                'Segunda parada seguida en "%s" sin que el nodo "%s" haya dicho nada',
+                $server->name,
+                $event->node_name ?: '?'
+            ), [
+                'motivo' => 'el contenedor de instalacion anterior sigue colgado en el nodo',
+                'que_hacer_en_el_nodo' => $event->nodeCommands(),
+            ], $server->id);
+        }
+
         $event->fill([
             'status' => $by === 'sistema' ? InstallEvent::STATUS_TIMEOUT : InstallEvent::STATUS_CANCELLED,
             'resolution' => $mode,
@@ -599,36 +716,226 @@ class InstallGuard
     }
 
     /**
-     * La ultima parada de este servidor, si fue hace poco.
+     * Segundos por debajo de los cuales un fallo es sospechoso.
+     *
+     * Una instalacion de verdad, aunque acabe mal, tarda lo suyo: descargar la
+     * imagen, crear el contenedor y correr el script. El rechazo por bloqueo,
+     * en cambio, llega en un par de segundos: wings sincroniza con el panel,
+     * ve que no puede coger el bloqueo y contesta.
+     *
+     * Se deja un margen amplio sobre esos dos segundos, pero corto para no
+     * tragarse un fallo de verdad del cliente que reviente enseguida.
+     */
+    private const FALLO_INSTANTANEO = 20;
+
+    /**
+     * ¿Por que ha fallado esto de verdad?
+     *
+     * Lo que hay detras: wings guarda en memoria un "estoy instalando" por
+     * servidor y no lo suelta hasta que el contenedor de instalacion termina.
+     * Si aquel contenedor se quedo colgado, cualquier instalacion nueva de ese
+     * servidor se rechaza al instante ("cannot obtain installation lock") y el
+     * nodo le dice al panel que fallo. Visto desde fuera parece que el cliente
+     * puso mal sus datos otra vez, cuando en realidad ni se ha llegado a
+     * intentar y no hay nada que corregir en el panel.
+     */
+    private function diagnoseFailure(InstallEvent $event, CarbonImmutable $started): void
+    {
+        $segundos = (int) $started->diffInSeconds(CarbonImmutable::now());
+
+        if ($segundos > self::FALLO_INSTANTANEO) {
+            return;
+        }
+
+        $anterior = $event->previous();
+        $trasUnaParada = $anterior !== null && $anterior->wasStoppedBySystem();
+
+        $event->diagnosis = $trasUnaParada
+            ? InstallEvent::DIAG_NODE_BUSY
+            : InstallEvent::DIAG_FAST_FAIL;
+
+        if (!$trasUnaParada) {
+            return;
+        }
+
+        $event->notes = sprintf(
+            'El nodo devolvio el fallo en %d segundos, justo despues de haberle parado otra instalacion a este servidor. '
+            . 'Casi seguro que wings sigue ocupado con el contenedor de instalacion anterior y ha rechazado esta. '
+            . 'Se suelta desde el nodo con: %s',
+            $segundos,
+            implode('  o bien  ', $event->nodeCommands())
+        );
+
+        ExtensionEvent::log('warning', 'installs', sprintf(
+            'El nodo "%s" rechazo al instante la instalacion de "%s"',
+            $event->node_name ?: '?',
+            $event->server_name ?: '?'
+        ), [
+            'motivo' => 'wings sigue ocupado con el contenedor de instalacion anterior',
+            'segundos' => $segundos,
+            'que_hacer_en_el_nodo' => $event->nodeCommands(),
+        ], $event->server_id);
+
+        // Y si el nodo tiene acceso SSH configurado, se arregla solo.
+        $this->fixNode($event);
+    }
+
+    /**
+     * Intenta soltar el bloqueo entrando por SSH en el nodo.
+     *
+     * Solo se hace si el administrador ha guardado el acceso de ese nodo y ha
+     * marcado "arreglarlo solo". Sin eso, la extension se limita a decir que
+     * comando hay que ejecutar.
+     */
+    public function fixNode(InstallEvent $event): ?array
+    {
+        if (!$event->server_uuid || !$event->node_id) {
+            return null;
+        }
+
+        try {
+            $acceso = NodeAccess::query()
+                ->where('node_id', $event->node_id)
+                ->where('enabled', true)
+                ->where('auto_fix', true)
+                ->first();
+
+            if (!$acceso) {
+                return null;
+            }
+
+            $ssh = app(NodeSsh::class);
+            $estado = $ssh->installerStatus($acceso, $event->server_uuid);
+
+            if (!$estado['ok']) {
+                ExtensionEvent::log('warning', 'nodos', 'No se pudo mirar el contenedor de instalacion en el nodo', [
+                    'nodo' => $event->node_name,
+                    'error' => $estado['error'],
+                ], $event->server_id);
+
+                return null;
+            }
+
+            if (!$estado['existe']) {
+                // No habia contenedor colgado: el bloqueo era de otra cosa.
+                return null;
+            }
+
+            $resultado = $ssh->killInstaller($acceso, $event->server_uuid);
+
+            $event->forceFill([
+                'notes' => trim((string) $event->notes) . ($resultado['ok']
+                    ? ' | La extension entro en el nodo y elimino el contenedor colgado: el servidor ya se puede reinstalar.'
+                    : ' | Se intento eliminar el contenedor en el nodo y no se pudo: ' . mb_substr((string) ($resultado['error'] ?: $resultado['salida']), 0, 200)),
+            ])->save();
+
+            if ($resultado['ok']) {
+                ExtensionEvent::log('info', 'nodos', sprintf(
+                    'Bloqueo de instalacion liberado solo en el nodo "%s" para "%s"',
+                    $event->node_name ?: '?',
+                    $event->server_name ?: '?'
+                ), [
+                    'contenedor_que_estaba_colgado' => $estado['detalle'],
+                ], $event->server_id);
+            }
+
+            return $resultado;
+        } catch (\Throwable $e) {
+            ExtensionEvent::log('error', 'nodos', 'Fallo al intentar arreglar el nodo por SSH', [
+                'error' => mb_substr($e->getMessage(), 0, 300),
+            ], $event->server_id);
+
+            return null;
+        }
+    }
+
+    /**
+     * Servidores cuyo nodo esta claramente atascado.
+     *
+     * Es lo que se ensena arriba del todo en la pantalla de instalaciones:
+     * cuando esto sale, no hay nada que tocar en el panel ni en los datos del
+     * cliente, hay que entrar al nodo.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function stuckNodes(int $horas = 24): array
+    {
+        $eventos = InstallEvent::query()
+            ->whereIn('diagnosis', [InstallEvent::DIAG_NODE_BUSY, InstallEvent::DIAG_NODE_SILENT])
+            ->where('finished_at', '>=', now()->subHours(max(1, $horas)))
+            ->orderByDesc('finished_at')
+            ->get();
+
+        $porServidor = [];
+
+        foreach ($eventos as $evento) {
+            if (isset($porServidor[$evento->server_id])) {
+                $porServidor[$evento->server_id]['veces']++;
+
+                continue;
+            }
+
+            // Si despues de aquello ya se instalo bien, el nodo se desatasco
+            // solo (el contenedor colgado acabo muriendo) y no hay que avisar.
+            $resuelto = InstallEvent::query()
+                ->where('server_id', $evento->server_id)
+                ->where('status', InstallEvent::STATUS_SUCCESS)
+                ->where('started_at', '>=', $evento->finished_at)
+                ->exists();
+
+            if ($resuelto) {
+                continue;
+            }
+
+            $porServidor[$evento->server_id] = [
+                'server_id' => $evento->server_id,
+                'server_name' => $evento->server_name,
+                'server_uuid' => $evento->server_uuid,
+                'node_name' => $evento->node_name,
+                'user_name' => $evento->user_name,
+                'user_email' => $evento->user_email,
+                'motivo' => $evento->diagnosis,
+                'cuando' => $evento->finished_at,
+                'veces' => 1,
+                'comandos' => $evento->nodeCommands(),
+                'admin_url' => url('/admin/servers/view/' . $evento->server_id),
+            ];
+        }
+
+        return array_values($porServidor);
+    }
+
+    /**
+     * Como acabo el ultimo intento de este servidor, si fue hace poco.
      *
      * La usa el area de cliente para seguir explicando que paso despues de que
      * el servidor quede desbloqueado: sin esto, en cuanto se desbloquea el
      * aviso desaparece y el cliente se queda sin saber por que le cambio el
-     * puerto.
+     * puerto. Se mira siempre el ultimo intento, no la ultima parada, porque
+     * si entre medias el nodo ha rechazado una reinstalacion eso es lo que hay
+     * que contarle, y no lo de antes.
      */
-    public function recentStop(Server $server, int $minutes = 120): ?InstallEvent
+    public function recentOutcome(Server $server, int $minutes = 120): ?InstallEvent
     {
-        $event = InstallEvent::query()
+        // Se ordena por id y no por fecha: el id siempre va en el orden real
+        // en que se abrieron las filas, y una instalacion que ya estaba en
+        // marcha puede registrarse con una fecha de arranque anterior a la de
+        // la fila que se creo antes que ella.
+        $ultimo = InstallEvent::query()
             ->where('server_id', $server->id)
-            ->whereIn('status', [InstallEvent::STATUS_TIMEOUT, InstallEvent::STATUS_CANCELLED])
-            ->whereNotNull('finished_at')
-            ->where('finished_at', '>=', now()->subMinutes(max(1, $minutes)))
-            ->orderByDesc('finished_at')
+            ->orderByDesc('id')
             ->first();
 
-        if (!$event) {
+        // Si el ultimo intento sigue abierto, lo de antes ya no le sirve de
+        // nada al cliente: hay una instalacion nueva en marcha.
+        if (!$ultimo || $ultimo->finished_at === null) {
             return null;
         }
 
-        // Si despues de aquella parada ya hubo otro intento, lo que paso antes
-        // ya no le sirve de nada al cliente.
-        $posterior = InstallEvent::query()
-            ->where('server_id', $server->id)
-            ->where('id', '!=', $event->id)
-            ->where('started_at', '>=', $event->finished_at)
-            ->exists();
-
-        return $posterior ? null : $event;
+        return CarbonImmutable::parse($ultimo->finished_at)
+            ->greaterThanOrEqualTo(CarbonImmutable::now()->subMinutes(max(1, $minutes)))
+                ? $ultimo
+                : null;
     }
 
     private function notifyOwner(Server $server, int $minutes, ?array $rotation, array $warnings): void

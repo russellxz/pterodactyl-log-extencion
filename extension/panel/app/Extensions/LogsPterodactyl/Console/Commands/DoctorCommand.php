@@ -39,14 +39,14 @@ class DoctorCommand extends Command
         );
 
         // 2. Tablas.
-        foreach (['logspterodactyl_settings', 'logspterodactyl_events', 'logspterodactyl_install_events', 'logspterodactyl_mail_logs', 'logspterodactyl_resource_samples', 'logspterodactyl_update_runs'] as $table) {
+        foreach (['logspterodactyl_settings', 'logspterodactyl_events', 'logspterodactyl_install_events', 'logspterodactyl_mail_logs', 'logspterodactyl_resource_samples', 'logspterodactyl_update_runs', 'logspterodactyl_node_access'] as $table) {
             $problems += $this->check(Schema::hasTable($table), 'Tabla ' . $table, 'Ejecuta: php artisan logspterodactyl:install');
         }
 
         // 2b. Columnas que anaden las migraciones posteriores. Si faltan, la
         //     base de datos se quedo a medias en alguna actualizacion.
         if (Schema::hasTable('logspterodactyl_install_events')) {
-            foreach (['attempt', 'previous_id', 'unblock_until', 'unblocked_times'] as $columna) {
+            foreach (['attempt', 'previous_id', 'unblock_until', 'unblocked_times', 'diagnosis'] as $columna) {
                 $problems += $this->check(
                     Schema::hasColumn('logspterodactyl_install_events', $columna),
                     'Columna ' . $columna . ' del historial de instalaciones',

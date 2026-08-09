@@ -20,6 +20,10 @@ class UninstallCommand extends Command
     protected $description = 'Borra las tablas de la extension LogsPterodactyl de la base de datos';
 
     private const TABLES = [
+        // El acceso a los nodos va primero: lleva credenciales cifradas y es
+        // lo que menos gracia hace dejarse olvidado en la base de datos.
+        'logspterodactyl_node_access',
+        'logspterodactyl_mail_campaigns',
         'logspterodactyl_update_runs',
         'logspterodactyl_resource_samples',
         'logspterodactyl_mail_logs',

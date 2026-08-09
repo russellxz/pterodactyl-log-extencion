@@ -17,6 +17,64 @@
         </div>
     </div>
 
+    @if(count($stuckNodes) > 0)
+        <div class="row">
+            <div class="col-xs-12">
+                <div class="box box-danger">
+                    <div class="box-header with-border">
+                        <h3 class="box-title">Hay que entrar al nodo: esto no se arregla desde el panel</h3>
+                    </div>
+                    <div class="box-body">
+                        <p class="text-muted" style="margin-bottom:14px;">
+                            Estos servidores no fallan por los datos del cliente. Wings se guarda en su
+                            memoria un "estoy instalando" por servidor y no lo suelta hasta que el
+                            contenedor de instalacion termina; si aquel contenedor se quedo colgado,
+                            <strong>rechaza al instante</strong> cualquier instalacion nueva de ese
+                            servidor y le dice al panel que fallo. Por eso da igual cuantas veces se
+                            reinstale desde aqui, o se cambie el estado a mano: hasta que no se mate
+                            ese contenedor en el nodo, no hay manera.
+                        </p>
+
+                        @foreach($stuckNodes as $atasco)
+                            <div class="logspterodactyl-note logspterodactyl-note-error" style="display:block;margin-bottom:12px;">
+                                <div style="margin-bottom:8px;">
+                                    @logsicon('alert', 16)
+                                    <a href="{{ $atasco['admin_url'] }}"><strong>{{ $atasco['server_name'] }}</strong></a>
+                                    en el nodo <strong>{{ $atasco['node_name'] ?: '?' }}</strong>
+                                    <span class="logspterodactyl-muted logspterodactyl-small">
+                                        &mdash; {{ $atasco['user_name'] }} ({{ $atasco['user_email'] }})
+                                        &mdash; {{ $atasco['veces'] }} intento(s) rechazado(s), el ultimo {{ $atasco['cuando'] }}
+                                    </span>
+                                </div>
+                                <div class="logspterodactyl-small" style="margin-bottom:4px;">
+                                    Entra por SSH a ese nodo y ejecuta lo primero. Si aun asi sigue igual, lo segundo:
+                                </div>
+@foreach($atasco['comandos'] as $comando)
+<pre style="margin:0 0 6px;">{{ $comando }}</pre>
+@endforeach
+                                <div class="logspterodactyl-small logspterodactyl-muted" style="margin-bottom:8px;">
+                                    No borra nada del servidor: solo mata el contenedor de instalacion
+                                    que se quedo colgado. Despues, el cliente ya puede reinstalar normal.
+                                </div>
+                                <form method="POST" style="display:inline;"
+                                      action="{{ route('admin.logspterodactyl.nodes.release', $atasco['server_id']) }}"
+                                      onsubmit="return confirm('La extension entrara por SSH en el nodo y eliminara el contenedor de instalacion colgado de este servidor. No se borra nada mas. ¿Continuar?');">
+                                    {{ csrf_field() }}
+                                    <button type="submit" class="btn btn-xs btn-warning">
+                                        Hacerlo por mi (SSH)
+                                    </button>
+                                </form>
+                                <span class="logspterodactyl-muted logspterodactyl-small" style="margin-left:6px;">
+                                    Necesita el acceso del nodo guardado en la pestana <strong>Nodos</strong>.
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="row">
         <div class="col-xs-12">
             <div class="box">
@@ -339,7 +397,9 @@
 
                     html += '<tr class="' + (s.over_limit ? 'logspterodactyl-row-warning' : '') + '">'
                         + '<td><a href="' + escapeHtml(s.admin_url) + '"><strong>' + escapeHtml(s.name) + '</strong></a>'
-                        + (s.is_reinstall ? ' <span class="logspterodactyl-chip">reinstalacion</span>' : '')
+                        + (s.attempt > 1 ? ' <span class="logspterodactyl-chip">intento ' + s.attempt + '</span>'
+                            : (s.is_reinstall ? ' <span class="logspterodactyl-chip">reinstalacion</span>' : ''))
+                        + (s.after_stop ? ' <span class="logspterodactyl-chip">tras una parada</span>' : '')
                         + '<div class="logspterodactyl-muted logspterodactyl-small">' + escapeHtml(s.egg) + '</div></td>'
                         + '<td>' + escapeHtml(s.owner) + '<div class="logspterodactyl-muted logspterodactyl-small">' + escapeHtml(s.owner_email) + '</div></td>'
                         + '<td>' + escapeHtml(s.node)
