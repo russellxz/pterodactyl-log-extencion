@@ -1,0 +1,13 @@
+# Nada del panel ni dependencias: esta extension no las lleva.
+/vendor/
+/node_modules/
+
+# Basura del sistema
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Registros y respaldos que pudieran quedar sueltos al probar
+*.log
+/extension/panel/public/extensions/arixlog/runs/
