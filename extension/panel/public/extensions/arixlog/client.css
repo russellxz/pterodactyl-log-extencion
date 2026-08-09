@@ -1,0 +1,273 @@
+/*!
+ * ArixLog - estilos del aviso de instalacion (area de cliente)
+ *
+ * Todo va con prefijo .arixlog- y con variables propias para no heredar ni
+ * pisar nada del tema. Se apoya en las variables de color de Arix cuando
+ * existen (--primary, --gray800...) y cae a unos valores neutros cuando no,
+ * asi luce bien tanto en Arix como en el panel original.
+ */
+
+.arixlog-overlay {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2147483000;
+    width: min(420px, calc(100vw - 32px));
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity .2s ease, transform .2s ease;
+    font-family: var(--fontFamily, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
+}
+
+.arixlog-overlay.arixlog-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.arixlog-card {
+    position: relative;
+    background: rgb(var(--gray800, 31 36 48));
+    color: rgb(var(--gray200, 226 232 240));
+    border: 1px solid rgb(var(--gray600, 71 85 105));
+    border-left: 3px solid #e0a53a;
+    border-radius: var(--radiusBox, 10px);
+    padding: 18px 20px 16px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .38);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+/* Si el tema no define las variables, rgb() con un valor invalido no aplica;
+   este respaldo garantiza un fondo solido en cualquier panel. */
+@supports not (color: rgb(var(--gray800, 31 36 48))) {
+    .arixlog-card {
+        background: #1f2430;
+        color: #e2e8f0;
+        border-color: #475569;
+    }
+}
+
+.arixlog-icon {
+    flex: 0 0 auto;
+    vertical-align: -.15em;
+}
+
+.arixlog-dismiss {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    color: rgb(var(--gray400, 148 163 184));
+    cursor: pointer;
+    padding: 0;
+    transition: background .15s ease, color .15s ease;
+}
+
+.arixlog-dismiss:hover {
+    background: rgba(255, 255, 255, .08);
+    color: inherit;
+}
+
+.arixlog-head {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding-right: 26px;
+}
+
+.arixlog-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: rgba(224, 165, 58, .14);
+    color: #e0a53a;
+}
+
+.arixlog-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: inherit;
+}
+
+.arixlog-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.arixlog-lead {
+    margin: 14px 0 10px;
+    font-size: 13.5px;
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.arixlog-checks {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid rgb(var(--gray600, 71 85 105));
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.arixlog-checks li {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 4px 0;
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.arixlog-checks li .arixlog-icon {
+    margin-top: 2px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.arixlog-checks strong {
+    color: inherit;
+    font-weight: 600;
+}
+
+.arixlog-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.arixlog-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px;
+    border: 1px solid transparent;
+    border-radius: var(--radiusInput, 7px);
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: filter .15s ease, background .15s ease;
+}
+
+.arixlog-btn:disabled {
+    cursor: default;
+    opacity: .75;
+}
+
+.arixlog-btn-danger {
+    background: #c0392b;
+    color: #fff;
+}
+
+.arixlog-btn-danger:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+
+.arixlog-btn-ghost {
+    background: transparent;
+    border-color: rgb(var(--gray600, 71 85 105));
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.arixlog-btn-ghost:hover {
+    background: rgba(255, 255, 255, .06);
+}
+
+.arixlog-hint,
+.arixlog-confirm-text {
+    font-size: 12.5px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.arixlog-confirm-text {
+    font-weight: 600;
+    width: 100%;
+}
+
+.arixlog-result {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 14px;
+    padding: 11px 13px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.arixlog-result-ok {
+    background: rgba(45, 160, 90, .13);
+    border: 1px solid rgba(45, 160, 90, .4);
+    color: #6fd39b;
+}
+
+.arixlog-result-error {
+    background: rgba(192, 57, 43, .13);
+    border: 1px solid rgba(192, 57, 43, .4);
+    color: #f0938a;
+}
+
+.arixlog-result .arixlog-icon {
+    margin-top: 2px;
+}
+
+.arixlog-spin {
+    display: inline-flex;
+    animation: arixlog-rotate 1s linear infinite;
+}
+
+@keyframes arixlog-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .arixlog-overlay,
+    .arixlog-spin {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* En movil la tarjeta ocupa el ancho completo, pegada abajo. */
+@media (max-width: 640px) {
+    .arixlog-overlay {
+        right: 12px;
+        left: 12px;
+        bottom: 12px;
+        width: auto;
+    }
+
+    .arixlog-card {
+        padding: 16px 16px 14px;
+    }
+}
+
+/* El panel puede estar en modo claro (Arix lo permite): en ese caso se usan
+   los tonos claros del propio tema. */
+.lightmode .arixlog-card {
+    background: rgb(var(--gray800, 255 255 255));
+    color: rgb(var(--gray200, 31 41 55));
+    box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+}
+
+.lightmode .arixlog-checks {
+    background: rgba(15, 23, 42, .035);
+}

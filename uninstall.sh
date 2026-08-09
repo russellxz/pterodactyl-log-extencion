@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# =============================================================================
+#  ArixLog - desinstalador
+#
+#  Deja el panel exactamente como estaba: quita los archivos, la linea de
+#  config/app.php y las tablas de la extension. No toca nada del panel ni del
+#  tema Arix.
+#
+#  Uso:
+#      sudo bash uninstall.sh [/ruta/del/panel] [--keep-data] [--force]
+#
+#      --keep-data   Conserva las tablas (historial de instalaciones, correos,
+#                    consumo...). Util si vas a reinstalar la extension.
+#      --force       No pregunta nada.
+# =============================================================================
+set -uo pipefail
+
+PANEL="/var/www/pterodactyl"
+KEEP_DATA=0
+FORCE=0
+
+for argument in "$@"; do
+    case "$argument" in
+        --keep-data) KEEP_DATA=1 ;;
+        --force) FORCE=1 ;;
+        -*) printf 'Opcion desconocida: %s\n' "$argument"; exit 1 ;;
+        *) PANEL="${argument%/}" ;;
+    esac
+done
+
+if [ -t 1 ]; then
+    B=$'\033[1m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; N=$'\033[0m'
+else
+    B=''; G=''; Y=''; R=''; N=''
+fi
+
+ok()   { printf '  %s[ok]%s   %s\n' "$G" "$N" "$1"; }
+warn() { printf '  %s[..]%s   %s\n' "$Y" "$N" "$1"; }
+err()  { printf '  %s[!!]%s   %s\n' "$R" "$N" "$1"; }
+
+printf '\n%s  ArixLog - desinstalador%s\n' "$B" "$N"
+printf '  ---------------------------------------------------------------\n'
+
+if [ ! -f "$PANEL/artisan" ]; then
+    err "No se encontro el panel de Pterodactyl en: $PANEL"
+    printf '\n  Uso: sudo bash uninstall.sh /ruta/del/panel\n\n'
+    exit 1
+fi
+
+ok "Panel encontrado en $PANEL"
+
+printf '\n  Se va a quitar:\n'
+printf '    - %s/app/Extensions/ArixLog\n' "$PANEL"
+printf '    - %s/public/extensions/arixlog\n' "$PANEL"
+printf '    - la linea de ArixLog en config/app.php\n'
+
+if [ "$KEEP_DATA" -eq 1 ]; then
+    printf '    - las tablas se CONSERVAN (--keep-data)\n'
+else
+    printf '    - las tablas arixlog_* y todo su contenido\n'
+fi
+
+printf '\n  No se toca nada del panel, del tema Arix ni de tus servidores.\n\n'
+
+if [ "$FORCE" -ne 1 ]; then
+    printf '  ¿Continuar? [s/N] '
+    read -r answer
+    case "$answer" in
+        s|S|si|SI|Si|y|Y|yes) ;;
+        *) printf '\n  Cancelado. No se ha tocado nada.\n\n'; exit 0 ;;
+    esac
+fi
+
+cd "$PANEL" || exit 1
+
+# --- 1. Base de datos (antes de borrar los archivos: el comando vive en ellos)
+
+if [ "$KEEP_DATA" -eq 1 ]; then
+    warn "Tablas conservadas por peticion (--keep-data)"
+else
+    if php artisan arixlog:uninstall --force >/dev/null 2>&1; then
+        ok "Tablas de la extension borradas"
+    else
+        warn "No se pudieron borrar las tablas con artisan"
+        printf '        Puedes borrarlas a mano cuando quieras:\n'
+        printf '        DROP TABLE arixlog_update_runs, arixlog_resource_samples,\n'
+        printf '          arixlog_mail_logs, arixlog_install_events,\n'
+        printf '          arixlog_events, arixlog_settings;\n'
+    fi
+fi
+
+# --- 2. Quitar el registro del proveedor ------------------------------------
+
+if [ -f "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" ]; then
+    if php "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" "$PANEL" --remove >/dev/null 2>&1; then
+        ok "Linea de ArixLog quitada de config/app.php"
+    else
+        err "No se pudo editar config/app.php"
+        printf '        Quita a mano la linea que contiene ArixLogServiceProvider.\n'
+    fi
+else
+    # Respaldo por si los archivos ya no estan: se limpia con sed.
+    if grep -q 'ArixLogServiceProvider' "$PANEL/config/app.php" 2>/dev/null; then
+        cp "$PANEL/config/app.php" "$PANEL/config/app.php.arixlog-antes-de-desinstalar"
+        sed -i '/ArixLog START/,/ArixLog END/d; /ArixLogServiceProvider/d' "$PANEL/config/app.php"
+
+        if php -l "$PANEL/config/app.php" >/dev/null 2>&1; then
+            ok "Linea de ArixLog quitada de config/app.php"
+        else
+            mv "$PANEL/config/app.php.arixlog-antes-de-desinstalar" "$PANEL/config/app.php"
+            err "El archivo quedaba invalido, se ha restaurado. Quita la linea a mano."
+        fi
+    else
+        ok "config/app.php ya estaba limpio"
+    fi
+fi
+
+# --- 3. Borrar los archivos -------------------------------------------------
+
+rm -rf "$PANEL/app/Extensions/ArixLog" && ok "Codigo borrado" || err "No se pudo borrar app/Extensions/ArixLog"
+rm -rf "$PANEL/public/extensions/arixlog" && ok "Recursos publicos borrados" || err "No se pudo borrar public/extensions/arixlog"
+
+# Si la carpeta app/Extensions se queda vacia se quita tambien, para no dejar
+# rastro; si hay otras extensiones se respeta.
+rmdir "$PANEL/app/Extensions" 2>/dev/null && ok "Carpeta app/Extensions vacia, borrada" || true
+rmdir "$PANEL/public/extensions" 2>/dev/null || true
+
+# La copia de seguridad de config/app.php que hizo el instalador ya no sirve.
+rm -f "$PANEL/config/app.php.arixlog-backup" "$PANEL/config/app.php.arixlog-antes-de-desinstalar"
+
+# --- 4. Limpiar caches ------------------------------------------------------
+
+rm -f "$PANEL"/bootstrap/cache/config.php "$PANEL"/bootstrap/cache/services.php "$PANEL"/bootstrap/cache/packages.php 2>/dev/null
+
+php artisan config:clear >/dev/null 2>&1 && ok "Cache de configuracion limpiada" || warn "No se pudo limpiar la cache de configuracion"
+php artisan view:clear   >/dev/null 2>&1 && ok "Cache de vistas limpiada"        || warn "No se pudo limpiar la cache de vistas"
+php artisan route:clear  >/dev/null 2>&1 && ok "Cache de rutas limpiada"         || warn "No se pudo limpiar la cache de rutas"
+
+if command -v composer >/dev/null 2>&1; then
+    COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload -o --no-interaction >/dev/null 2>&1 \
+        && ok "Autocarga regenerada" || warn "composer dump-autoload fallo (no es grave)"
+fi
+
+# --- Resumen ----------------------------------------------------------------
+
+printf '\n%s  ArixLog desinstalado%s\n' "$G$B" "$N"
+printf '  ---------------------------------------------------------------\n'
+printf '  El panel ha quedado como estaba.\n'
+
+if [ "$KEEP_DATA" -eq 1 ]; then
+    printf '  Las tablas arixlog_* siguen ahi por si reinstalas.\n'
+fi
+
+printf '\n  Los respaldos del panel en /var/backups/arixlog NO se han tocado.\n'
+printf '  Si ya no los necesitas, borralos a mano.\n\n'
