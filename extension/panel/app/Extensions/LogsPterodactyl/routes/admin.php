@@ -62,13 +62,6 @@ Route::post('/nodes/{node}/delete', [Admin\NodesController::class, 'destroy'])->
 Route::post('/nodes/{node}/restart-wings', [Admin\NodesController::class, 'restartWings'])->name('nodes.restart');
 Route::post('/nodes/release/{server}', [Admin\NodesController::class, 'releaseServer'])->name('nodes.release');
 
-// Las otras extensiones del panel: copias, descarga y restauracion.
-Route::get('/extensions', [Admin\ExtensionsController::class, 'index'])->name('extensions');
-Route::post('/extensions/backup', [Admin\ExtensionsController::class, 'backup'])->name('extensions.backup');
-Route::get('/extensions/{file}/download', [Admin\ExtensionsController::class, 'download'])->name('extensions.download');
-Route::post('/extensions/{file}/restore', [Admin\ExtensionsController::class, 'restore'])->name('extensions.restore');
-Route::post('/extensions/{file}/delete', [Admin\ExtensionsController::class, 'destroy'])->name('extensions.delete');
-Route::post('/extensions/{key}/remove', [Admin\ExtensionsController::class, 'remove'])->name('extensions.remove');
 
 Route::get('/updater', [Admin\UpdaterController::class, 'index'])->name('updater');
 Route::post('/updater/check', [Admin\UpdaterController::class, 'check'])->name('updater.check');

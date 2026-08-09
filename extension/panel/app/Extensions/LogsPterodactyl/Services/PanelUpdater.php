@@ -346,32 +346,6 @@ class PanelUpdater
         $theme = $this->themeInfo();
         $token = bin2hex(random_bytes(16));
 
-        // Copia de las OTRAS extensiones antes de tocar nada. El respaldo
-        // completo del panel ya las lleva dentro, pero enterradas en un tar de
-        // varios cientos de megas; esto deja un zip pequeno, con manifiesto,
-        // que se puede descargar y restaurar con un boton desde la pantalla de
-        // extensiones. Si falla no se aborta la actualizacion: se avisa.
-        $extensiones = null;
-
-        try {
-            $vault = app(ExtensionVault::class);
-
-            if ($vault->detect() !== []) {
-                $extensiones = $vault->backup();
-            }
-        } catch (\Throwable $e) {
-            ExtensionEvent::log('warning', 'extensiones', 'No se pudo respaldar las otras extensiones antes de actualizar', [
-                'error' => mb_substr($e->getMessage(), 0, 300),
-            ]);
-        }
-
-        if ($extensiones !== null) {
-            ExtensionEvent::log('info', 'extensiones', 'Copia de las otras extensiones hecha antes de actualizar el panel', [
-                'archivo' => $extensiones['file'],
-                'incluidas' => $extensiones['incluidas'],
-            ]);
-        }
-
         $run = UpdateRun::create([
             'token' => $token,
             'from_version' => $this->currentVersion(),
@@ -499,6 +473,7 @@ class PanelUpdater
             'credentials' => $credentials,
             'registerTool' => base_path('app/Extensions/LogsPterodactyl/tools/register-provider.php'),
             'versionTool' => base_path('app/Extensions/LogsPterodactyl/tools/sync-version.php'),
+            'repairTool' => base_path('app/Extensions/LogsPterodactyl/tools/repair-providers.php'),
             'webUser' => $this->webUser(),
         ])->render();
 

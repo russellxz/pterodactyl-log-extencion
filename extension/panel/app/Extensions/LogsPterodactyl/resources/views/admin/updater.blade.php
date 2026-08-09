@@ -154,19 +154,22 @@
                                    value="{{ $latest['version'] }}" placeholder="por ejemplo 1.15.0">
                         </div>
 
-                        <div class="logspterodactyl-note logspterodactyl-note-warning" style="display:block;">
-                            @logsicon('database', 16)
+                        <div class="logspterodactyl-note logspterodactyl-note-info" style="display:block;">
+                            @logsicon('shield', 16)
                             <span>
-                                <strong>Antes de darle, guardate las otras extensiones.</strong>
-                                Actualizar trae un <code>config/app.php</code> nuevo y se lleva por
-                                delante las lineas de proveedor de los demas addons: sus archivos
-                                siguen ahi, pero el panel deja de cargarlos.
+                                <strong>Si tienes otras extensiones instaladas.</strong>
+                                El paquete oficial reemplaza <code>composer.json</code> y
+                                <code>config/app.php</code>, asi que un addon de otro puede quedarse
+                                sin sus dependencias mientras su linea sigue registrada. Cuando eso
+                                pasa, Laravel no arranca y se cae hasta el <code>artisan up</code>
+                                que saca al panel del mantenimiento.
                                 <br><br>
-                                Entra en <a href="{{ route('admin.logspterodactyl.extensions') }}"><strong>Otras
-                                extensiones</strong></a>, haz la copia y <strong>descargatela</strong>.
-                                Asi la tienes en tu equipo aunque algo se tuerza en el servidor.
-                                Cuando lances la actualizacion se hace otra copia sola, pero esa se
-                                queda en el servidor.
+                                Este actualizador lo comprueba en los dos puntos donde suele pasar
+                                (despues de instalar dependencias y despues de restaurar el tema) y,
+                                si el panel no arranca, <strong>desactiva solo las lineas rotas</strong>
+                                para que la actualizacion pueda terminar. Te quedan comentadas en
+                                <code>config/app.php</code> para volver a activarlas cuando
+                                reinstales ese addon.
                             </span>
                         </div>
 
