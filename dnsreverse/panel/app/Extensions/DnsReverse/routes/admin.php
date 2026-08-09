@@ -20,6 +20,8 @@ Route::get('/', [Admin\DashboardController::class, 'index'])->name('index');
 Route::get('/domains', [Admin\DomainsController::class, 'index'])->name('domains');
 Route::get('/domains/new', [Admin\DomainsController::class, 'create'])->name('domains.new');
 Route::post('/domains', [Admin\DomainsController::class, 'store'])->name('domains.store');
+// Comprueba un certificado pegado, este el dominio guardado o no.
+Route::post('/domains/test-certificate', [Admin\DomainsController::class, 'testCertificate'])->name('domains.testcert');
 Route::get('/domains/{domain}', [Admin\DomainsController::class, 'edit'])->name('domains.edit');
 Route::post('/domains/{domain}', [Admin\DomainsController::class, 'update'])->name('domains.update');
 Route::post('/domains/{domain}/test', [Admin\DomainsController::class, 'test'])->name('domains.test');
@@ -27,6 +29,7 @@ Route::post('/domains/{domain}/delete', [Admin\DomainsController::class, 'destro
 
 // --- DNS creados por los clientes ---
 Route::get('/records', [Admin\RecordsController::class, 'index'])->name('records');
+Route::get('/records/{record}/check', [Admin\RecordsController::class, 'check'])->name('records.check');
 Route::post('/records/{record}/sync', [Admin\RecordsController::class, 'sync'])->name('records.sync');
 Route::post('/records/{record}/delete', [Admin\RecordsController::class, 'destroy'])->name('records.delete');
 Route::post('/records/purge', [Admin\RecordsController::class, 'purge'])->name('records.purge');

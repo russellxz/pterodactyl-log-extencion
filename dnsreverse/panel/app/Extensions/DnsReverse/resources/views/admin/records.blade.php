@@ -112,6 +112,11 @@
                                 <td class="small">{{ $registro->sslLabel() }}</td>
                                 <td class="small">{{ optional($registro->created_at)->format('d/m/Y') ?? '-' }}</td>
                                 <td class="text-right dnsreverse-actions">
+                                    <button type="button" class="btn btn-xs btn-info"
+                                            title="Comprobar por que no carga"
+                                            onclick="dnsreverseDiagnostico({{ $registro->id }}, '{{ $registro->domain }}')">
+                                        @dnsicon('search', 12)
+                                    </button>
                                     <form method="POST" action="{{ route('admin.dnsreverse.records.sync', $registro->id) }}" style="display:inline;">
                                         @csrf
                                         <button type="submit" class="btn btn-xs btn-default" title="Volver a mandar la configuracion al nodo">
@@ -145,10 +150,53 @@
         </div>
     </div>
 
+    {{-- Resultado del diagnostico de un dominio --}}
+    <div class="row" id="dnsreverseDiagFila" hidden>
+        <div class="col-xs-12">
+            <div class="box box-info">
+                <div class="box-header with-border">
+                    <h3 class="box-title" id="dnsreverseDiagTitulo">Diagnostico</h3>
+                    <div class="box-tools">
+                        <button type="button" class="btn btn-xs btn-default"
+                                onclick="document.getElementById('dnsreverseDiagFila').hidden = true;">Cerrar</button>
+                    </div>
+                </div>
+                <div class="box-body" id="dnsreverseDiagCuerpo"></div>
+            </div>
+        </div>
+    </div>
+
 @endsection
 
 @section('dnsreverse-scripts')
 <script>
+function dnsreverseDiagnostico(id, dominio) {
+    var fila = document.getElementById('dnsreverseDiagFila');
+    var cuerpo = document.getElementById('dnsreverseDiagCuerpo');
+
+    fila.hidden = false;
+    document.getElementById('dnsreverseDiagTitulo').textContent = 'Diagnostico de ' + dominio;
+    cuerpo.innerHTML = '<p class="text-muted">Comprobando DNS, destino y respuesta... (puede tardar unos segundos)</p>';
+    fila.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    fetch(@json(url('admin/dnsreverse/records')) + '/' + id + '/check', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            var html = '<p class="dnsreverse-diag-resumen ' + (d.ok ? 'dnsreverse-cert-ok' : 'dnsreverse-cert-error') +
+                '"><strong>' + d.resumen + '</strong></p><ul class="dnsreverse-diag">';
+
+            (d.pasos || []).forEach(function (p) {
+                html += '<li class="dnsreverse-diag-' + p.estado + '">' +
+                    '<strong>' + p.nombre + ':</strong> ' + p.detalle + '</li>';
+            });
+
+            cuerpo.innerHTML = html + '</ul>';
+        })
+        .catch(function (e) {
+            cuerpo.innerHTML = '<p class="dnsreverse-cert-error">No se pudo comprobar: ' + e + '</p>';
+        });
+}
+
 (function () {
     var todos = document.getElementById('dnsreverseSelectAll');
     if (todos) {

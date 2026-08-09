@@ -9,6 +9,7 @@ use Illuminate\View\View;
 use Pterodactyl\Extensions\DnsReverse\Models\DnsDomain;
 use Pterodactyl\Extensions\DnsReverse\Models\DnsEvent;
 use Pterodactyl\Extensions\DnsReverse\Models\ProxyRecord;
+use Pterodactyl\Extensions\DnsReverse\Services\CertificateInspector;
 use Pterodactyl\Extensions\DnsReverse\Services\CloudflareClient;
 use Pterodactyl\Http\Controllers\Controller;
 
@@ -68,6 +69,12 @@ class DomainsController extends Controller
                 ->with('dnsreverse_error', 'Ese dominio ya estaba dado de alta.');
         }
 
+        if ($problema = $this->certificadoInvalido($datos, $dominio)) {
+            return redirect()->route('admin.dnsreverse.domains.new')
+                ->withInput()
+                ->with('dnsreverse_error', $problema);
+        }
+
         $modelo = new DnsDomain();
         $this->rellenar($modelo, $datos, $request);
         $modelo->save();
@@ -100,6 +107,12 @@ class DomainsController extends Controller
         if ($nuevo !== $domain->domain && DnsDomain::query()->where('domain', $nuevo)->exists()) {
             return redirect()->route('admin.dnsreverse.domains.edit', $domain->id)
                 ->with('dnsreverse_error', 'Ya hay otro dominio dado de alta con ese nombre.');
+        }
+
+        if ($problema = $this->certificadoInvalido($datos, $nuevo)) {
+            return redirect()->route('admin.dnsreverse.domains.edit', $domain->id)
+                ->withInput()
+                ->with('dnsreverse_error', $problema);
         }
 
         // Si cambia el dominio, la zona cacheada de Cloudflare deja de valer.
@@ -156,6 +169,41 @@ class DomainsController extends Controller
         }
 
         return response()->json($resultado);
+    }
+
+    /**
+     * Revisa el certificado que se acaba de pegar sin necesidad de guardarlo.
+     *
+     * Un certificado mal puesto no da la cara al guardarlo: la da meses
+     * despues, cuando un cliente entra a su pagina y el navegador le dice que
+     * el sitio no es seguro. Aqui se ve al momento.
+     */
+    public function testCertificate(Request $request): JsonResponse
+    {
+        $dominio = strtolower(trim((string) $request->input('domain')));
+        $cert = (string) $request->input('ssl_cert');
+        $clave = (string) $request->input('ssl_key');
+
+        // Si no han tocado los campos, se revisa el que ya estuviera guardado.
+        if (trim($cert) === '' && $request->filled('domain_id')) {
+            $guardado = DnsDomain::find((int) $request->input('domain_id'));
+
+            if ($guardado !== null) {
+                $cert = (string) $guardado->ssl_cert;
+                $clave = (string) $guardado->ssl_key;
+                $dominio = $dominio !== '' ? $dominio : $guardado->domain;
+            }
+        }
+
+        $revision = CertificateInspector::revisar($cert, $clave, $dominio ?: null);
+
+        return response()->json([
+            'ok' => $revision['ok'],
+            'errores' => $revision['errores'],
+            'avisos' => $revision['avisos'],
+            'datos' => $revision['datos'],
+            'enlace' => $dominio !== '' ? CertificateInspector::enlaceCloudflare($dominio) : null,
+        ]);
     }
 
     /**
@@ -231,6 +279,33 @@ class DomainsController extends Controller
         // para revisarlo), asi que se guarda tal cual llegue.
         $modelo->ssl_cert = $this->limpiarPem($datos['ssl_cert'] ?? '');
         $modelo->ssl_key = $this->limpiarPem($datos['ssl_key'] ?? '');
+    }
+
+    /**
+     * Devuelve el motivo por el que NO se puede guardar el certificado, o null
+     * si esta bien (o si no han puesto ninguno, que tambien vale).
+     *
+     * Se corta aqui a proposito: guardar un certificado roto significa que el
+     * fallo aparece semanas despues, en la pagina de un cliente, y nadie sabe
+     * de donde viene.
+     */
+    private function certificadoInvalido(array $datos, string $dominio): ?string
+    {
+        $cert = trim((string) ($datos['ssl_cert'] ?? ''));
+        $clave = trim((string) ($datos['ssl_key'] ?? ''));
+
+        if ($cert === '' && $clave === '') {
+            return null;
+        }
+
+        $revision = CertificateInspector::revisar($cert, $clave, $dominio);
+
+        if ($revision['ok']) {
+            return null;
+        }
+
+        return 'No se ha guardado el certificado: ' . implode(' ', $revision['errores'])
+            . ' Puedes generar uno nuevo aqui: ' . CertificateInspector::enlaceCloudflare($dominio);
     }
 
     private function limpiarPem(?string $valor): ?string

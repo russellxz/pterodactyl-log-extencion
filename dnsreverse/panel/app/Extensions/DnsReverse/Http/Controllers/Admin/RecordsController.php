@@ -9,6 +9,7 @@ use Illuminate\View\View;
 use Pterodactyl\Extensions\DnsReverse\Models\DnsDomain;
 use Pterodactyl\Extensions\DnsReverse\Models\DnsEvent;
 use Pterodactyl\Extensions\DnsReverse\Models\ProxyRecord;
+use Pterodactyl\Extensions\DnsReverse\Services\DomainChecker;
 use Pterodactyl\Extensions\DnsReverse\Services\ProxyManager;
 use Pterodactyl\Http\Controllers\Controller;
 
@@ -69,6 +70,17 @@ class RecordsController extends Controller
                 'filter' => (string) $request->input('filter'),
             ],
         ]);
+    }
+
+    /**
+     * Diagnostico de un dominio: si existe en DNS, a donde apunta, si responde
+     * y si el certificado vale. Es lo que contesta a "mi pagina no carga".
+     */
+    public function check(ProxyRecord $record): JsonResponse
+    {
+        return response()->json(
+            DomainChecker::revisar($record->load(['allocation', 'server']))
+        );
     }
 
     /**
