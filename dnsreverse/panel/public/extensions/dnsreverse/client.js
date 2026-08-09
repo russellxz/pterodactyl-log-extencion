@@ -232,60 +232,24 @@
         return conteos[mejor] >= 2 ? candidatos[mejor] : null;
     }
 
-    /**
-     * Boton flotante de reserva.
-     *
-     * Si no se encuentra la barra del servidor (un tema muy cambiado, o una
-     * version del panel que la dibuja de otra forma), la entrada tiene que
-     * aparecer igualmente: si no, el cliente se queda sin poder crear su DNS y
-     * no hay forma de que sepa que la funcion existe.
-     */
-    function ponerBotonFlotante() {
-        if (document.querySelector('[data-dnsrev-flotante]')) {
-            return;
-        }
-
-        var boton = document.createElement('button');
-        boton.setAttribute('type', 'button');
-        boton.setAttribute('data-dnsrev-flotante', '1');
-        boton.className = 'dnsrev-flotante';
-        boton.setAttribute('title', 'DNS Reverse: pon un dominio a tu servidor');
-        boton.innerHTML = icono('globe', 18) + '<span>DNS Reverse</span>';
-        boton.addEventListener('click', abrir);
-
-        document.body.appendChild(boton);
-    }
-
-    function quitarBotonFlotante() {
-        var boton = document.querySelector('[data-dnsrev-flotante]');
-
-        if (boton && boton.parentNode) {
-            boton.parentNode.removeChild(boton);
-        }
-    }
-
     function ponerEntrada() {
         var servidor = servidorActual();
 
-        if (!servidor) {
-            quitarBotonFlotante();
-            return;
-        }
-
-        if (document.querySelector('[data-dnsrev-nav]')) {
+        if (!servidor || document.querySelector('[data-dnsrev-nav]')) {
             return;
         }
 
         var barra = barraDelServidor();
 
         if (!barra) {
-            // Sin barra reconocible, boton flotante para que nunca falte.
-            avisar('no se encontro la barra del servidor, se usa el boton flotante');
-            ponerBotonFlotante();
+            // Todavia no esta dibujada (el panel es una aplicacion de una sola
+            // pagina y tarda un poco) o el tema la monta de otra forma. Se
+            // vuelve a intentar en el siguiente repaso, cada 700 ms.
+            avisar('todavia no se encuentra la barra del servidor, reintentando');
+
             return;
         }
 
-        quitarBotonFlotante();
         avisar('entrada anadida a la barra del servidor');
 
         var referencia = barra.querySelector('a[href*="/server/"]');
@@ -303,17 +267,16 @@
 
         barra.appendChild(enlace);
 
-        // Ultima comprobacion: si despues de meterla la entrada no se ve (el
-        // tema la esconde, la barra tenia overflow oculto, lo que sea), se
-        // retira y se saca el boton flotante. Vale mas un boton feo que una
-        // funcion invisible.
+        // Si la barra elegida resulta estar escondida (algunos temas llevan un
+        // segundo menu para movil con los mismos enlaces), se retira y en el
+        // siguiente repaso se busca otra. Asi la entrada no se queda puesta en
+        // un sitio donde el cliente no la va a ver nunca.
         if (!esVisible(enlace)) {
             if (enlace.parentNode) {
                 enlace.parentNode.removeChild(enlace);
             }
 
-            avisar('la barra encontrada estaba oculta, se usa el boton flotante');
-            ponerBotonFlotante();
+            avisar('la barra encontrada estaba oculta, se busca otra');
         }
     }
 

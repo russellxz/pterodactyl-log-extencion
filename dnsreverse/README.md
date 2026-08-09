@@ -540,15 +540,18 @@ Si dentro de un servidor tampoco sale:
    ahi que ha hecho:
    - `entrada anadida a la barra del servidor` &rarr; esta puesta; si no la ves,
      mira mas a la derecha en la barra (se puede desplazar).
-   - `no se encontro la barra del servidor, se usa el boton flotante` &rarr; el
-     tema dibuja el menu de otra forma, asi que sale un **boton redondo abajo a
-     la derecha**. Funciona exactamente igual.
+   - `todavia no se encuentra la barra del servidor, reintentando` &rarr; el tema
+     dibuja el menu de otra forma. Sigue intentandolo cada 700 ms, asi que si
+     el mensaje se repite sin parar es que no lo reconoce.
    - Si no aparece **ningun** mensaje, el archivo no se esta cargando: repasa el
      punto 2.
 
-Con temas muy modificados la entrada puede acabar en un menu que el tema
-esconde en pantallas grandes. La extension lo detecta y en ese caso saca el
-boton flotante, asi que **siempre hay una forma de entrar**.
+Mientras tanto, la pantalla siempre se puede abrir por la direccion directa:
+`https://TU-PANEL/server/ID-DEL-SERVIDOR/dnsreverse`
+
+Si el tema tiene un segundo menu para movil con los mismos enlaces, la
+extension evita meter ahi la entrada: comprueba que se vea de verdad y, si no,
+busca otra barra en el siguiente repaso.
 
 ### "El nodo no tiene instalado el complemento de wings"
 
