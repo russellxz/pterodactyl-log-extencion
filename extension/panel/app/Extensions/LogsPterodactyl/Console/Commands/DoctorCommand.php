@@ -43,6 +43,18 @@ class DoctorCommand extends Command
             $problems += $this->check(Schema::hasTable($table), 'Tabla ' . $table, 'Ejecuta: php artisan logspterodactyl:install');
         }
 
+        // 2b. Columnas que anaden las migraciones posteriores. Si faltan, la
+        //     base de datos se quedo a medias en alguna actualizacion.
+        if (Schema::hasTable('logspterodactyl_install_events')) {
+            foreach (['attempt', 'previous_id', 'unblock_until', 'unblocked_times'] as $columna) {
+                $problems += $this->check(
+                    Schema::hasColumn('logspterodactyl_install_events', $columna),
+                    'Columna ' . $columna . ' del historial de instalaciones',
+                    'Base de datos a medias. Ejecuta: php artisan logspterodactyl:install'
+                );
+            }
+        }
+
         // 3. Archivos publicos.
         foreach (['client.js', 'client.css', 'admin.js', 'admin.css'] as $asset) {
             $path = public_path('extensions/logspterodactyl/' . $asset);

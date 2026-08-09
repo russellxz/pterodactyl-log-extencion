@@ -55,16 +55,36 @@
                         <div class="logspterodactyl-note logspterodactyl-note-info">
                             @logsicon('shield', 16)
                             <span>
-                                <strong>Nunca se borra nada.</strong> Al detener una instalacion el
-                                servidor se queda en su sitio con un puerto nuevo, para que el cliente
-                                revise sus datos de arranque y lo reinstale el mismo.
+                                <strong>Nunca se borra nada.</strong> Al detener una instalacion se
+                                hacen dos cosas y en este orden: primero se cambia el estado de la
+                                instalacion (el servidor pasa a estar <em>instalado</em>, exactamente
+                                igual que con el boton rosa "Toggle Install Status" de la pestana
+                                Manage) y despues se le cambia el puerto. Asi el cliente deja de ver
+                                "Running Installer" al momento y puede entrar a revisar su
+                                configuracion antes de reinstalar el mismo.
                                 <br><br>
                                 Un apunte honesto: wings no tiene ninguna orden para cancelar una
                                 instalacion en marcha, asi que el contenedor del nodo puede seguir
-                                trabajando hasta que termine por su cuenta. Lo que si se consigue al
-                                momento es que el cliente deje de ver la pantalla de "instalando" y
-                                pueda trabajar.
+                                trabajando hasta que termine por su cuenta. Cuando termine, el nodo
+                                avisara al panel y el panel volveria a bloquear el servidor: de eso
+                                se encarga la vigilancia de aqui abajo.
                             </span>
+                        </div>
+
+                        <div class="form-group" style="margin-top:14px;">
+                            <label for="unblock_guard_minutes">Mantener el servidor desbloqueado durante</label>
+                            <div class="input-group">
+                                <input type="number" min="0" max="10080" name="unblock_guard_minutes"
+                                       id="unblock_guard_minutes" class="form-control"
+                                       value="{{ $settings->int('unblock_guard_minutes') }}">
+                                <span class="input-group-addon">minutos</span>
+                            </div>
+                            <p class="text-muted logspterodactyl-small" style="margin-top:6px;">
+                                Tiempo durante el cual, si el nodo avisa tarde de aquella instalacion
+                                y el panel vuelve a marcar el servidor como fallido, la extension lo
+                                devuelve a "instalado" sola. Con 0 se apaga. Si el cliente lanza una
+                                instalacion nueva, la vigilancia se retira sola y no la estorba.
+                            </p>
                         </div>
 
                         <div class="form-group" style="margin-top:14px;">

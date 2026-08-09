@@ -41,6 +41,7 @@
         stop: '<circle cx="12" cy="12" r="10"/><rect width="6" height="6" x="9" y="9" rx="1"/>',
         clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
         check: '<path d="M20 6 9 17l-5-5"/>',
+        unlock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
         close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
         spinner: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
     };
@@ -98,6 +99,35 @@
         return meta ? meta.getAttribute('content') : '';
     }
 
+    // Cuando el cliente cierra el aviso de "instalacion detenida" no tiene
+    // ninguna gracia que le vuelva a salir al recargar la pagina, asi que se
+    // recuerda por servidor y parada mientras dure la pestana.
+    function dismissKey(server, stoppedId) {
+        return 'logspterodactyl:dismissed:' + server + ':' + (stoppedId || '-');
+    }
+
+    function dismiss(server, stoppedId) {
+        state.dismissed[dismissKey(server, stoppedId)] = true;
+
+        try {
+            window.sessionStorage.setItem(dismissKey(server, stoppedId), '1');
+        } catch (e) {
+            // Navegador sin sessionStorage o en modo privado: da igual.
+        }
+    }
+
+    function isDismissed(server, stoppedId) {
+        if (state.dismissed[dismissKey(server, stoppedId)]) {
+            return true;
+        }
+
+        try {
+            return window.sessionStorage.getItem(dismissKey(server, stoppedId)) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
     // --- Tarjeta ------------------------------------------------------------
 
     function build(data) {
@@ -147,7 +177,7 @@
         );
 
         wrapper.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
-            state.dismissed[data.serverId] = true;
+            dismiss(data.serverId, 'instalando');
             remove();
         });
 
@@ -158,17 +188,17 @@
         return wrapper;
     }
 
-    // Tarjeta 2: la instalacion se detuvo. Aqui no se ofrece nada mas: el
-    // servidor sigue en su sitio con su puerto nuevo, y el cliente reinstala
-    // el mismo desde el panel cuando haya corregido sus datos.
+    // Tarjeta 2: la instalacion se detuvo. El servidor ya esta desbloqueado
+    // (marcado como instalado) y con su puerto nuevo, asi que aqui solo se
+    // explica que hacer: revisar los datos y volver a instalar.
     function buildStopped(data) {
         var wrapper = shell(
             '  <div class="logspterodactyl-head">' +
             '    <span class="logspterodactyl-badge logspterodactyl-badge-ok">' + icon('check', 18) + '</span>' +
             '    <div>' +
             '      <h3 class="logspterodactyl-title">Instalacion detenida</h3>' +
-            '      <p class="logspterodactyl-subtitle">' + icon('clock', 14) +
-            '        <span>Revisa tus datos y vuelve a instalar cuando quieras.</span>' +
+            '      <p class="logspterodactyl-subtitle">' + icon('unlock', 14) +
+            '        <span>Tu servidor ya esta desbloqueado: puedes entrar y revisar la configuracion.</span>' +
             '      </p>' +
             '    </div>' +
             '  </div>' +
@@ -182,7 +212,7 @@
         );
 
         wrapper.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
-            state.dismissed[data.serverId] = true;
+            dismiss(data.serverId, data.stoppedId);
             remove();
         });
 
@@ -250,6 +280,9 @@
                     (payload.port_changed && payload.new_allocation
                         ? ' Tu nueva direccion es <strong>' + escapeHtml(payload.new_allocation) + '</strong>.'
                         : '') +
+                    (payload.unblocked === false
+                        ? ''
+                        : ' Ya puedes entrar en tu servidor y revisar la configuracion.') +
                     '</span>';
 
                 if (payload.warnings && payload.warnings.length) {
@@ -353,10 +386,6 @@
             return;
         }
 
-        if (state.dismissed[server]) {
-            return;
-        }
-
         request('GET', '/server/' + encodeURIComponent(server) + '/install-status', function (status, payload) {
             if (status !== 200 || !payload) {
                 return;
@@ -365,7 +394,7 @@
             if (payload.installing) {
                 state.wasInstalling = true;
 
-                if (!payload.can_cancel) {
+                if (!payload.can_cancel || isDismissed(server, 'instalando')) {
                     remove();
                     return;
                 }
@@ -383,9 +412,20 @@
                 return;
             }
 
-            // Si la instalacion acabo mal, se explica que hacer.
-            if (payload.failed) {
-                show({ serverId: server, mode: 'stopped', address: payload.address });
+            // La instalacion se paro hace poco: se recuerda que hay que
+            // revisar los datos y donde esta ahora el servidor.
+            if (payload.stopped || payload.failed) {
+                if (isDismissed(server, payload.stopped_id)) {
+                    remove();
+                    return;
+                }
+
+                show({
+                    serverId: server,
+                    stoppedId: payload.stopped_id,
+                    mode: 'stopped',
+                    address: payload.address,
+                });
                 return;
             }
 

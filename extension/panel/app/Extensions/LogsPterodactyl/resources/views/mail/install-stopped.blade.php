@@ -27,6 +27,11 @@
                             normal tarda unos pocos minutos.
                         </p>
 
+                        <p style="margin:0 0 16px;">
+                            Tu servidor <strong>sigue donde estaba, no se ha borrado nada</strong>, y ya
+                            esta desbloqueado: puedes entrar en el y revisar toda su configuracion.
+                        </p>
+
                         @if($rotation)
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f8fa;border:1px solid #e3e6ec;border-radius:8px;margin:0 0 16px;">
                                 <tr>

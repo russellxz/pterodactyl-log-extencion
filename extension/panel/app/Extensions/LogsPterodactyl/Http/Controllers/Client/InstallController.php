@@ -31,16 +31,21 @@ class InstallController extends Controller
         }
 
         if ($model->status !== Server::STATUS_INSTALLING) {
-            // Si acaba de fallar, el aviso se queda para ofrecer el boton de
-            // volver a instalar en cuanto el cliente corrija sus datos.
-            $fallida = in_array($model->status, [
-                Server::STATUS_INSTALL_FAILED,
-                Server::STATUS_REINSTALL_FAILED,
-            ], true);
+            // Ya no esta instalando. Si la parada es reciente el aviso se
+            // queda un rato explicando que paso: el servidor ya esta
+            // desbloqueado, pero el cliente tiene que enterarse de por que le
+            // ha cambiado el puerto y de que le toca revisar sus datos.
+            $parada = $this->guard->recentStop($model);
 
             return new JsonResponse([
                 'installing' => false,
-                'failed' => $fallida,
+                'stopped' => $parada !== null,
+                // Se mantiene por compatibilidad con versiones anteriores del
+                // javascript que pudieran quedar en cache del navegador.
+                'failed' => $parada !== null,
+                'stopped_id' => $parada?->id,
+                'stopped_by_system' => $parada?->cancelled_by === 'sistema',
+                'port_changed' => $parada?->new_allocation !== null,
                 'server' => $model->name,
                 'address' => $this->address($model),
             ]);
@@ -93,9 +98,11 @@ class InstallController extends Controller
             ], 425);
         }
 
-        // Se detiene y se le cambia el puerto. El servidor se queda donde
-        // esta: el cliente revisa sus datos de arranque y vuelve a instalar el
-        // mismo cuando quiera, con el boton de siempre del panel.
+        // Se para la instalacion: primero se cambia el estado (el servidor
+        // pasa a estar instalado y deja de salir "Running Installer") y
+        // despues se le cambia el puerto. El servidor se queda donde esta: el
+        // cliente revisa sus datos de arranque y vuelve a instalar el mismo
+        // cuando quiera, con el boton de siempre del panel.
         $mode = $this->settings->bool('client_cancel_rotate_port')
             ? InstallGuard::MODE_FAIL_ROTATE
             : InstallGuard::MODE_FAIL;
@@ -113,6 +120,7 @@ class InstallController extends Controller
         return new JsonResponse([
             'ok' => true,
             'message' => 'Instalacion detenida.',
+            'unblocked' => $result['unblocked'],
             'port_changed' => $result['port_changed'],
             'new_allocation' => $result['new_allocation'],
             'warnings' => $result['warnings'],

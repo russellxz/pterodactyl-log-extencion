@@ -28,6 +28,11 @@ class Settings
         'watchdog_action' => 'fail_rotate',
         'watchdog_notify_owner' => '1',
         'watchdog_same_ip' => '1',
+        // Minutos que la extension sigue vigilando un servidor despues de
+        // pararle la instalacion. Si el nodo avisa tarde de que aquella
+        // instalacion fallo y el panel lo vuelve a bloquear, se desbloquea
+        // otra vez. Con 0 se apaga la vigilancia.
+        'unblock_guard_minutes' => '180',
 
         // --- Boton de cancelar del area de cliente ---
         'client_cancel_enabled' => '1',

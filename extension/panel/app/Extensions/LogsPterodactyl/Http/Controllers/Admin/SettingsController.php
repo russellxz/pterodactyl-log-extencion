@@ -36,6 +36,7 @@ class SettingsController extends Controller
             'watchdog_action' => 'required|in:fail,fail_rotate',
             'watchdog_notify_owner' => 'nullable|boolean',
             'watchdog_same_ip' => 'nullable|boolean',
+            'unblock_guard_minutes' => 'required|integer|min:0|max:10080',
 
             'client_cancel_enabled' => 'nullable|boolean',
             'client_cancel_minutes' => 'required|integer|min:1|max:1440',
