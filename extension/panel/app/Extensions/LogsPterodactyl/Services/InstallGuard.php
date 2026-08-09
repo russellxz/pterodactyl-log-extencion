@@ -14,12 +14,21 @@ use Pterodactyl\Repositories\Wings\DaemonServerRepository;
 /**
  * Detiene instalaciones que se han quedado colgadas.
  *
- * Que hace exactamente al detener una:
+ * Que hace exactamente al detener una, y en este orden:
  *
- *   1. El panel deja de considerar el servidor "instalando". Esto es lo que
- *      desbloquea la pantalla del cliente al momento.
- *   2. Se le cambia el puerto a otro libre del mismo nodo.
- *   3. Se avisa al dueno y queda todo registrado.
+ *   1. Cambia el estado de la instalacion: el servidor se marca como
+ *      INSTALADO. Es exactamente lo mismo que hace el boton rosa "Toggle
+ *      Install Status" del area de administracion, y es lo unico que quita de
+ *      en medio la pantalla "Running Installer" y devuelve al cliente el
+ *      acceso a la consola y a la configuracion de su servidor.
+ *   2. Le cambia el puerto a otro libre del mismo nodo.
+ *   3. Le pasa al nodo la configuracion nueva, avisa al dueno y lo registra.
+ *
+ * El orden importa. Marcar el servidor como "instalacion fallida" (que es lo
+ * que hacia antes) no sirve: la aplicacion del panel ensena la misma pantalla
+ * de "Running Installer" para "installing", "install_failed" y
+ * "reinstall_failed", asi que el cliente se quedaba igual de bloqueado. Solo
+ * el estado "instalado" lo desbloquea.
  *
  * Y que NO hace, a proposito: no borra el servidor, ni en el panel ni en el
  * nodo. El servidor se queda donde esta, con su puerto nuevo, para que el
@@ -31,8 +40,9 @@ use Pterodactyl\Repositories\Wings\DaemonServerRepository;
  * reinstall, sync y delete, y power se rechaza mientras instala). La unica
  * forma de matar el contenedor seria borrar el servidor en el nodo, y eso
  * borraria tambien sus archivos, asi que no se hace. El contenedor colgado
- * termina por su cuenta y para entonces el cliente ya lleva rato pudiendo
- * trabajar, que es lo que importa.
+ * termina por su cuenta; cuando lo hace, wings avisa al panel y el panel
+ * vuelve a marcar el servidor como fallido, asi que la extension se queda
+ * vigilando un rato para devolverlo a "instalado" (ver keepUnblocked()).
  */
 class InstallGuard
 {
@@ -81,6 +91,13 @@ class InstallGuard
      * (installed_at sigue vacio porque el panel solo lo rellena cuando wings
      * responde, incluso si fallo); en una reinstalacion vale updated_at, que
      * es lo que toca el panel al pasar el servidor a "installing".
+     *
+     * Y hay un caso que hay que mirar aparte: un servidor al que ya se le paro
+     * una instalacion antes. Ahi created_at puede ser de hace tres dias, asi
+     * que si el cliente vuelve a instalar y se usara esa fecha, la instalacion
+     * nueva pareceria colgada desde el primer minuto y el vigilante la cortaria
+     * al instante. La de ahora no puede haber empezado antes de que terminara
+     * la anterior.
      */
     public function startedAt(Server $server): CarbonImmutable
     {
@@ -90,11 +107,30 @@ class InstallGuard
             return CarbonImmutable::parse($tracked->started_at);
         }
 
-        $reference = $server->installed_at === null
+        $reference = CarbonImmutable::parse(($server->installed_at === null
             ? ($server->created_at ?: $server->updated_at)
-            : ($server->updated_at ?: $server->created_at);
+            : ($server->updated_at ?: $server->created_at)) ?: now());
 
-        return CarbonImmutable::parse($reference ?: now());
+        $anterior = InstallEvent::query()
+            ->where('server_id', $server->id)
+            ->whereNotNull('finished_at')
+            ->orderByDesc('finished_at')
+            ->first();
+
+        if ($anterior && $anterior->finished_at) {
+            // El panel toca updated_at al poner el servidor en "instalando",
+            // asi que es la mejor pista de cuando arranco este intento; el
+            // final del intento anterior es el suelo por debajo del cual no
+            // puede estar.
+            $reference = max(
+                CarbonImmutable::parse($anterior->finished_at),
+                CarbonImmutable::parse($server->updated_at ?: $reference)
+            );
+        }
+
+        return $reference->greaterThan(CarbonImmutable::now())
+            ? CarbonImmutable::now()
+            : $reference;
     }
 
     public function minutesInstalling(Server $server): int
@@ -105,6 +141,12 @@ class InstallGuard
     /**
      * Para la instalacion de un servidor.
      *
+     * Primero se cambia el estado de la instalacion y despues el puerto, que es
+     * el orden correcto: mientras el panel siga creyendo que el servidor esta
+     * instalando (o que la instalacion fallo) el cliente no puede entrar en su
+     * servidor ni ver la configuracion, por mucho puerto nuevo que se le
+     * ponga.
+     *
      * No se borra nada: el servidor se queda en su sitio, con puerto nuevo,
      * listo para que el cliente revise sus datos y lo reinstale el mismo con
      * el boton de siempre del panel.
@@ -114,6 +156,7 @@ class InstallGuard
      *
      * @return array{
      *     status: string,
+     *     unblocked: bool,
      *     port_changed: bool,
      *     old_allocation: ?string,
      *     new_allocation: ?string,
@@ -124,15 +167,18 @@ class InstallGuard
     {
         $warnings = [];
         $minutes = $this->minutesInstalling($server);
-        $wasReinstall = $server->installed_at !== null;
 
-        // 1) El panel deja de considerarlo "instalando". Esto es lo que
-        //    desbloquea la pantalla del cliente al momento.
-        $status = $wasReinstall ? Server::STATUS_REINSTALL_FAILED : Server::STATUS_INSTALL_FAILED;
-        $server->forceFill(['status' => $status])->save();
+        // 1) PRIMERO el estado de la instalacion: el servidor pasa a estar
+        //    instalado, igual que con el boton "Toggle Install Status" del
+        //    area de administracion. Esto es lo que desbloquea al cliente.
+        $unblocked = $this->markInstalled($server);
 
-        // 2) Cambio de puerto, que es la otra mitad del trabajo: el cliente se
-        //    encuentra el servidor en una direccion nueva y limpia.
+        if (!$unblocked) {
+            $warnings[] = 'El servidor esta suspendido, se ha dejado su estado como estaba.';
+        }
+
+        // 2) DESPUES el puerto: el cliente se encuentra el servidor en una
+        //    direccion nueva y limpia, ya con acceso a su configuracion.
         $rotation = null;
 
         if ($mode === self::MODE_FAIL_ROTATE) {
@@ -154,17 +200,22 @@ class InstallGuard
             $warnings[] = 'No se pudo sincronizar con el nodo: ' . $this->short($e);
         }
 
-        // 4) Se vuelve a fijar el estado. Entre los pasos 1 y 3 puede haber
+        // 4) Se vuelve a mirar el estado. Entre los pasos 1 y 3 puede haber
         //    llegado el aviso de wings diciendo que la instalacion termino, y
         //    ese aviso escribe en el servidor.
         $server->refresh();
 
-        if ($server->status === Server::STATUS_INSTALLING) {
-            $server->forceFill(['status' => $status])->save();
+        if ($unblocked && $this->isBlocked($server)) {
+            $this->markInstalled($server);
         }
 
-        // 5) Historial.
-        $this->closeInstallEvent($server, $by, $minutes, $rotation, $mode);
+        // 5) Historial, con la vigilancia armada para que el aviso tardio del
+        //    nodo no vuelva a dejar al cliente mirando "Running Installer".
+        $event = $this->closeInstallEvent($server, $by, $minutes, $rotation, $mode);
+
+        if ($unblocked) {
+            $this->armUnblockGuard($event);
+        }
 
         ExtensionEvent::log('warning', 'installs', sprintf(
             'Instalacion detenida en "%s" tras %d minutos (%s)',
@@ -173,6 +224,7 @@ class InstallGuard
             $by
         ), [
             'modo' => $mode,
+            'estado_nuevo' => $unblocked ? 'instalado' : (string) $server->status,
             'puerto_anterior' => $rotation['old'] ?? null,
             'puerto_nuevo' => $rotation['new'] ?? null,
             'avisos' => $warnings,
@@ -184,12 +236,193 @@ class InstallGuard
         }
 
         return [
-            'status' => $status,
+            'status' => $unblocked ? 'instalado' : (string) $server->status,
+            'unblocked' => $unblocked,
             'port_changed' => $rotation !== null,
             'old_allocation' => $rotation['old'] ?? null,
             'new_allocation' => $rotation['new'] ?? null,
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Marca el servidor como instalado, que es lo mismo que hace el boton
+     * "Toggle Install Status" del area de administracion cuando lo sacas de
+     * "instalando".
+     *
+     * Un servidor suspendido se deja como esta: su estado no es un estado de
+     * instalacion y pisarlo lo dejaria sin suspender.
+     *
+     * @return bool si de verdad quedo desbloqueado
+     */
+    public function markInstalled(Server $server): bool
+    {
+        if ($server->status === Server::STATUS_SUSPENDED) {
+            return false;
+        }
+
+        // Se escribe con el constructor de consultas y no con save() por dos
+        // motivos. Uno: asi no se vuelve a disparar el evento del modelo, que
+        // es justo desde donde a veces se llama aqui. Y dos, el importante:
+        // dentro del evento "updated" Eloquent todavia no ha sincronizado los
+        // valores originales, asi que al dejar el campo como estaba antes del
+        // guardado lo veria "sin cambios" y no escribiria nada.
+        Server::query()->whereKey($server->getKey())->update(['status' => null]);
+
+        $server->setAttribute('status', null);
+        $server->syncOriginalAttribute('status');
+
+        return true;
+    }
+
+    /**
+     * Estados en los que el area de cliente ensena "Running Installer" y no
+     * deja entrar en el servidor.
+     */
+    public function isBlocked(Server $server): bool
+    {
+        return in_array($server->status, [
+            Server::STATUS_INSTALLING,
+            Server::STATUS_INSTALL_FAILED,
+            Server::STATUS_REINSTALL_FAILED,
+        ], true);
+    }
+
+    /**
+     * Deja anotado hasta cuando hay que mantener el servidor desbloqueado.
+     */
+    private function armUnblockGuard(InstallEvent $event): void
+    {
+        $minutes = $this->settings->int('unblock_guard_minutes', 0, 10080);
+
+        if ($minutes <= 0) {
+            return;
+        }
+
+        $event->forceFill(['unblock_until' => now()->addMinutes($minutes)])->save();
+    }
+
+    /**
+     * Devuelve a "instalado" un servidor que la extension habia desbloqueado y
+     * que ha vuelto a quedarse bloqueado por su cuenta.
+     *
+     * Pasa cuando el contenedor de instalacion colgado muere por fin, horas
+     * despues: wings avisa al panel de que aquella instalacion fallo y el panel
+     * marca el servidor como "install_failed". El cliente, que llevaba rato
+     * trabajando tan tranquilo, se lo encuentra bloqueado sin haber tocado
+     * nada. Esto lo deshace.
+     *
+     * Si el servidor esta instalando de verdad no se toca: eso quiere decir que
+     * el cliente ha vuelto a darle a reinstalar, que es justo lo que se queria.
+     */
+    public function unblockIfGuarded(Server $server): bool
+    {
+        $event = $this->armedGuardFor($server);
+
+        if (!$event) {
+            return false;
+        }
+
+        // El cliente ha lanzado una instalacion nueva: la vigilancia sobra y
+        // hay que quitarla de en medio para no estropearsela.
+        if ($server->status === Server::STATUS_INSTALLING) {
+            $this->disarmGuard($event);
+
+            return false;
+        }
+
+        if (!$this->isBlocked($server)) {
+            return false;
+        }
+
+        $bloqueo = (string) $server->status;
+
+        if (!$this->markInstalled($server)) {
+            return false;
+        }
+
+        $event->forceFill([
+            'unblocked_times' => (int) $event->unblocked_times + 1,
+            'notes' => trim((string) $event->notes . ' El nodo informo tarde de aquella instalacion y volvio a bloquear el servidor; se ha desbloqueado de nuevo.'),
+        ])->save();
+
+        ExtensionEvent::log('info', 'installs', sprintf(
+            'El servidor "%s" se volvio a bloquear solo y se ha desbloqueado otra vez',
+            $server->name
+        ), [
+            'estado_que_puso_el_panel' => $bloqueo,
+            'veces' => (int) $event->unblocked_times,
+        ], $server->id);
+
+        return true;
+    }
+
+    /**
+     * Repaso periodico de todos los servidores que quedaron bajo vigilancia.
+     *
+     * El observador de modelo ya arregla el caso normal al momento; esto es la
+     * red de seguridad para cuando el estado se escribe sin pasar por Eloquent
+     * y para ir retirando las vigilancias que ya no hacen falta.
+     *
+     * @return int cuantos servidores hubo que volver a desbloquear
+     */
+    public function keepUnblocked(): int
+    {
+        $eventos = InstallEvent::query()
+            ->whereNotNull('unblock_until')
+            ->get();
+
+        if ($eventos->isEmpty()) {
+            return 0;
+        }
+
+        $servidores = Server::query()
+            ->whereIn('id', $eventos->pluck('server_id')->filter()->all())
+            ->get()
+            ->keyBy('id');
+
+        $arreglados = 0;
+
+        foreach ($eventos as $evento) {
+            // Vigilancia caducada o servidor que ya no existe: se retira.
+            if (!$evento->unblock_until || $evento->unblock_until->isPast()) {
+                $this->disarmGuard($evento);
+
+                continue;
+            }
+
+            $server = $servidores->get($evento->server_id);
+
+            if (!$server) {
+                $this->disarmGuard($evento);
+
+                continue;
+            }
+
+            if ($this->unblockIfGuarded($server)) {
+                $arreglados++;
+            }
+        }
+
+        return $arreglados;
+    }
+
+    /**
+     * Vigilancia activa de un servidor, si la hay.
+     */
+    private function armedGuardFor(Server $server): ?InstallEvent
+    {
+        return InstallEvent::query()
+            ->where('server_id', $server->id)
+            ->whereNotNull('unblock_until')
+            ->where('unblock_until', '>=', now())
+            ->orderByDesc('unblock_until')
+            ->first();
+    }
+
+    private function disarmGuard(InstallEvent $event): void
+    {
+        $event->forceFill(['unblock_until' => null])->save();
     }
 
     /**
@@ -343,7 +576,7 @@ class InstallGuard
         return $closed;
     }
 
-    private function closeInstallEvent(Server $server, string $by, int $minutes, ?array $rotation, string $mode): void
+    private function closeInstallEvent(Server $server, string $by, int $minutes, ?array $rotation, string $mode): InstallEvent
     {
         $event = $this->openEventFor($server) ?? $this->openInstallEvent($server, $server->installed_at !== null);
 
@@ -358,9 +591,44 @@ class InstallGuard
             'finished_at' => now(),
             'duration_seconds' => $minutes * 60,
             'notes' => $rotation
-                ? 'Instalacion detenida y servidor movido a otro puerto. El cliente puede revisar sus datos y reinstalar cuando quiera.'
-                : 'Instalacion detenida. No se pudo cambiar el puerto.',
+                ? 'Instalacion detenida, servidor marcado como instalado y movido a otro puerto. El cliente ya puede entrar en su configuracion y reinstalar cuando quiera.'
+                : 'Instalacion detenida y servidor marcado como instalado. No se pudo cambiar el puerto.',
         ])->save();
+
+        return $event;
+    }
+
+    /**
+     * La ultima parada de este servidor, si fue hace poco.
+     *
+     * La usa el area de cliente para seguir explicando que paso despues de que
+     * el servidor quede desbloqueado: sin esto, en cuanto se desbloquea el
+     * aviso desaparece y el cliente se queda sin saber por que le cambio el
+     * puerto.
+     */
+    public function recentStop(Server $server, int $minutes = 120): ?InstallEvent
+    {
+        $event = InstallEvent::query()
+            ->where('server_id', $server->id)
+            ->whereIn('status', [InstallEvent::STATUS_TIMEOUT, InstallEvent::STATUS_CANCELLED])
+            ->whereNotNull('finished_at')
+            ->where('finished_at', '>=', now()->subMinutes(max(1, $minutes)))
+            ->orderByDesc('finished_at')
+            ->first();
+
+        if (!$event) {
+            return null;
+        }
+
+        // Si despues de aquella parada ya hubo otro intento, lo que paso antes
+        // ya no le sirve de nada al cliente.
+        $posterior = InstallEvent::query()
+            ->where('server_id', $server->id)
+            ->where('id', '!=', $event->id)
+            ->where('started_at', '>=', $event->finished_at)
+            ->exists();
+
+        return $posterior ? null : $event;
     }
 
     private function notifyOwner(Server $server, int $minutes, ?array $rotation, array $warnings): void

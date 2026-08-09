@@ -351,10 +351,10 @@
                         + '<td>'
                         + form(stopUrlTemplate, s.id, { mode: 'fail_rotate', notify: '1' },
                             'Parar y cambiar puerto', 'btn-warning',
-                            'Se detendra la instalacion y el servidor pasara a otro puerto libre del nodo. No se borra nada: el cliente podra revisar sus datos de arranque y reinstalarlo el mismo. ¿Continuar?')
+                            'Se marcara el servidor como instalado (igual que el boton "Toggle Install Status") y despues pasara a otro puerto libre del nodo. No se borra nada: el cliente podra entrar, revisar sus datos de arranque y reinstalarlo el mismo. ¿Continuar?')
                         + form(stopUrlTemplate, s.id, { mode: 'fail', notify: '1' },
                             'Solo parar', 'btn-default',
-                            'Se detendra la instalacion sin tocar el puerto. ¿Continuar?')
+                            'Se marcara el servidor como instalado para desbloquear al cliente, sin tocar el puerto. ¿Continuar?')
                         + '</td></tr>';
                 }
 

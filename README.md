@@ -8,6 +8,14 @@ los correos que salen (y los que no), el envio de correos a los clientes, el
 consumo real de cada servidor con nombre y correo de su dueno, y la
 actualizacion del panel con respaldo y vuelta atras.
 
+> **Novedades de la 1.1.0.** Al parar una instalacion colgada ahora se cambia
+> **primero el estado de la instalacion** (el servidor se marca como
+> *instalado*, igual que con el boton **"Toggle Install Status"** del admin) y
+> **despues el puerto**. Ese era el paso que habia que dar a mano para que el
+> panel dejara de decir *Running Installer*; ya no hace falta. Ademas el
+> servidor queda vigilado unas horas por si el nodo avisa tarde y lo vuelve a
+> bloquear. Se actualiza con `sudo bash update.sh`.
+
 ---
 
 ## Indice
@@ -214,7 +222,9 @@ El problema de los servidores que se quedan tres dias "instalando".
 revisa si hay instalaciones que pasen del tiempo configurado. Cuando una lo
 pasa:
 
-1. **Detiene la instalacion** (el panel deja de considerarlo "instalando").
+1. **Cambia el estado de la instalacion**: marca el servidor como *instalado*.
+   Es exactamente lo que hace el boton rosa **"Toggle Install Status"** de la
+   pestana *Manage* del admin, el que habia que pulsar a mano.
 2. Cambia el puerto a otro libre del mismo nodo, intentando mantener la IP.
 3. Avisa al dueno por correo diciendole que revise el token, el usuario y si
    el repositorio es privado.
@@ -231,10 +241,24 @@ al momento, con o sin cambio de puerto.
 
 #### Que hace exactamente al parar
 
-1. El panel deja de considerar el servidor "instalando". Eso desbloquea la
-   pantalla del cliente al momento.
-2. Se le cambia el puerto a otro libre del mismo nodo.
-3. Se avisa al dueno por correo y queda todo registrado.
+**Primero el estado, despues el puerto.** El orden importa:
+
+1. **Se cambia el estado de la instalacion**: el servidor pasa a estar
+   *instalado*. Es lo mismo que hace el boton rosa **"Toggle Install Status"**
+   del admin, y es lo unico que quita de en medio la pantalla *Running
+   Installer* y le devuelve al cliente el acceso a la consola, a los archivos y
+   a la configuracion de arranque.
+2. **Se le cambia el puerto** a otro libre del mismo nodo.
+3. Se le pasa la configuracion nueva al nodo, se avisa al dueno por correo y
+   queda todo registrado.
+
+Por que en ese orden y no al reves: mientras el panel siga creyendo que el
+servidor esta instalando (o que la instalacion fallo), el cliente no puede
+entrar a ver nada, por mucho puerto nuevo que se le ponga. De hecho la
+aplicacion del panel ensena la **misma** pantalla de *Running Installer* para
+los tres estados `installing`, `install_failed` y `reinstall_failed`, asi que
+marcar el servidor como "instalacion fallida" no desbloquea nada: el unico
+estado que sirve es *instalado*.
 
 Y lo que **no** hace, a proposito: **no borra nada**. Ni el servidor, ni sus
 archivos, ni en el panel ni en el nodo. El servidor se queda donde esta, con su
@@ -249,12 +273,31 @@ nodo, y eso borraria tambien sus archivos, asi que no se hace. El contenedor
 colgado termina por su cuenta; para entonces el cliente lleva rato pudiendo
 trabajar, que es lo que importa.
 
+#### La vigilancia de desbloqueo
+
+Hay un detalle que hacia que el arreglo manual tampoco durase: cuando el
+contenedor colgado muere por fin en el nodo (puede tardar horas), wings avisa al
+panel de que **aquella** instalacion fallo y el panel vuelve a marcar el
+servidor como `install_failed`. El cliente, que llevaba rato trabajando tan
+tranquilo, se lo encuentra otra vez con *Running Installer* sin haber tocado
+nada.
+
+Por eso, despues de parar una instalacion, la extension deja el servidor
+**vigilado** durante un tiempo (3 horas por defecto, configurable en
+*Configuracion*, y con `0` se apaga). Si durante ese rato alguien vuelve a
+bloquearlo, lo devuelve a *instalado* al momento y lo anota en el historial.
+
+La vigilancia no estorba nunca a una instalacion de verdad: en cuanto el cliente
+pulsa *Reinstalar servidor*, se retira sola. Si esa instalacion nueva falla, el
+cliente ve el fallo como siempre; eso no se tapa.
+
 | Modo | Que hace |
 |---|---|
-| **Parar y cambiar puerto** (por defecto) | Detiene la instalacion y mueve el servidor a otro puerto. |
-| Solo parar | Detiene la instalacion sin tocar el puerto. |
+| **Parar y cambiar puerto** (por defecto) | Marca el servidor como instalado y lo mueve a otro puerto. |
+| Solo parar | Marca el servidor como instalado sin tocar el puerto. |
 
-El sistema automatico y el boton del cliente hacen exactamente lo mismo.
+El sistema automatico, el boton del cliente y el boton del admin hacen
+exactamente lo mismo.
 
 ### 3. Seguimiento de los reintentos
 
@@ -434,10 +477,10 @@ cd pterodactyl-log-extencion && sudo bash update.sh
 
 ### El boton de parar dice que si pero el panel sigue igual
 
-Lo que hace parar es quitarle al servidor el estado "instalando" y cambiarle el
-puerto. Si tras pulsarlo sigues viendo la pantalla de instalacion, es que el
-navegador tiene el estado viejo en memoria: recarga con Ctrl+F5. La extension
-recarga sola, pero si la pagina estaba abierta de antes puede tardar un ciclo.
+Lo que hace parar es marcar el servidor como *instalado* y cambiarle el puerto.
+Si tras pulsarlo sigues viendo la pantalla de instalacion, es que el navegador
+tiene el estado viejo en memoria: recarga con Ctrl+F5. La extension recarga
+sola, pero si la pagina estaba abierta de antes puede tardar un ciclo.
 
 Comprueba en **Instalaciones** que ese servidor ya no sale en "instalando ahora
 mismo", y en **Registro** que la parada quedo anotada. Si la orden al nodo
@@ -445,13 +488,27 @@ fallo, el motivo aparece ahi (normalmente el panel no llega a wings).
 
 ### El panel sigue diciendo "Running Installer" despues de detenerla
 
-La aplicacion del panel guarda el estado del servidor en memoria y no lo vuelve
-a pedir sola. La extension lo detecta y recarga la pagina automaticamente, pero
-si la tenias abierta de antes puede que veas la pantalla vieja: recarga con
-Ctrl+F5 (o tirando hacia abajo en el movil).
+Desde la version 1.1.0 esto no deberia pasar: al parar, la extension marca el
+servidor como *instalado* (lo mismo que el boton **"Toggle Install Status"** de
+la pestana *Manage*), que es el unico estado que desbloquea la pantalla del
+cliente.
+
+Si aun asi la ves, casi siempre es el navegador: la aplicacion del panel guarda
+el estado del servidor en memoria y no lo vuelve a pedir sola. La extension lo
+detecta y recarga la pagina automaticamente, pero si la tenias abierta de antes
+puede que veas la pantalla vieja un momento. Recarga con Ctrl+F5 (o tirando
+hacia abajo en el movil).
+
+Si vuelve a salir **horas despues** sin que nadie haya tocado nada, es el nodo
+avisando tarde de aquella instalacion colgada. De eso se encarga la vigilancia
+de desbloqueo: comprueba en *Configuracion* que "Mantener el servidor
+desbloqueado durante" no este a `0` y que el cron del panel este corriendo. En
+**Registro** aparece cada vez que la extension ha tenido que desbloquearlo de
+nuevo.
 
 Para saber que dice de verdad la base de datos, entra en **Instalaciones**: si
 no hay ninguna en curso, ahi mismo aparece el recuento de servidores por estado.
+Un servidor desbloqueado sale como `(instalado / sin estado)`.
 
 ### El corte automatico no salta
 

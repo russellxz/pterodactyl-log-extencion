@@ -10,6 +10,7 @@ use Illuminate\Support\ServiceProvider;
 use Pterodactyl\Extensions\LogsPterodactyl\Http\Middleware\InjectAssets;
 use Pterodactyl\Extensions\LogsPterodactyl\Listeners\MailLogListener;
 use Pterodactyl\Extensions\LogsPterodactyl\Listeners\ServerInstallListener;
+use Pterodactyl\Extensions\LogsPterodactyl\Listeners\ServerStatusListener;
 use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
 
 /**
@@ -28,7 +29,7 @@ use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
  */
 class LogsPterodactylServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.0.0';
+    public const VERSION = '1.1.0';
 
     /**
      * Rutas del panel que jamas deben pasar por la inyeccion de HTML.
@@ -155,6 +156,11 @@ class LogsPterodactylServiceProvider extends ServiceProvider
         if (class_exists(\Pterodactyl\Events\Server\Installed::class)) {
             Event::listen(\Pterodactyl\Events\Server\Installed::class, [ServerInstallListener::class, 'handle']);
         }
+
+        // Y se vigila el estado de los servidores que la extension desbloqueo,
+        // para que el aviso tardio del nodo no los vuelva a dejar con la
+        // pantalla de "Running Installer".
+        ServerStatusListener::register();
     }
 
     /**

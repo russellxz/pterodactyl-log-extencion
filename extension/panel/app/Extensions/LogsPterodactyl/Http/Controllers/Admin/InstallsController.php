@@ -239,11 +239,15 @@ class InstallsController extends Controller
 
         $message = 'Instalacion de "' . $model->name . '" detenida.';
 
+        if ($result['unblocked']) {
+            $message .= ' El servidor queda marcado como instalado, igual que con el boton "Toggle Install Status".';
+        }
+
         if ($result['port_changed']) {
             $message .= ' Puerto cambiado de ' . ($result['old_allocation'] ?? '?') . ' a ' . $result['new_allocation'] . '.';
         }
 
-        $message .= ' El cliente ya puede revisar sus datos y reinstalarlo cuando quiera.';
+        $message .= ' El cliente ya puede entrar en su servidor, revisar sus datos y reinstalarlo cuando quiera.';
 
         foreach ($result['warnings'] as $warning) {
             $message .= ' Aviso: ' . $warning;

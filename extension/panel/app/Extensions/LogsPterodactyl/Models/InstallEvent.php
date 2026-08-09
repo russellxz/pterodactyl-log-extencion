@@ -30,8 +30,10 @@ class InstallEvent extends Model
         'attempt' => 'integer',
         'previous_id' => 'integer',
         'duration_seconds' => 'integer',
+        'unblocked_times' => 'integer',
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'unblock_until' => 'datetime',
     ];
 
     public function isOpen(): bool

@@ -50,6 +50,17 @@ class WatchInstallsCommand extends Command
             $this->line(sprintf('%d instalacion(es) cerradas en el historial.', $closed));
         }
 
+        // Repaso de los servidores que se pararon hace poco: si el nodo ha
+        // avisado tarde de aquella instalacion y el panel los ha vuelto a
+        // bloquear, se desbloquean otra vez.
+        if (!$dry) {
+            $desbloqueados = $guard->keepUnblocked();
+
+            if ($desbloqueados > 0) {
+                $this->line(sprintf('%d servidor(es) se habian vuelto a bloquear solos y se han desbloqueado.', $desbloqueados));
+            }
+        }
+
         $stuck = $guard->stuck($minutes);
 
         if ($stuck->isEmpty()) {
