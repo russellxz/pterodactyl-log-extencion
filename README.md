@@ -1,3 +1,106 @@
+# Extensiones para Pterodactyl
+
+Este repositorio trae **dos extensiones independientes** para el panel de
+Pterodactyl, compatibles con el tema **Arix**. Se instalan por separado y no se
+pisan entre ellas.
+
+| Extension | Para que sirve | Documentacion |
+|---|---|---|
+| **Logs Pterodactyl** | Errores del panel, instalaciones colgadas, correos, consumo de recursos y actualizacion del panel | este archivo |
+| **DNS Reverse** | Que tus clientes pongan un dominio propio o un subdominio tuyo a su servidor, con certificado | [dnsreverse/README.md](dnsreverse/README.md) |
+
+---
+
+## DNS Reverse (dominios y subdominios de clientes)
+
+Es la evolucion de la extension de "reverse proxy" que se instalaba parcheando
+archivos del panel a mano. Hace lo mismo y bastante mas, pero **sin tocar ni un
+archivo del panel**, asi que ya no desaparece al actualizar. Entre otras cosas:
+**un token de Cloudflare y un certificado por cada dominio** (antes habia uno
+solo para todos), listado de los dominios de tus clientes con enlace para
+visitarlos, bloqueo por servidor, todo en espanol y **renovacion automatica de
+los certificados de Let's Encrypt**, que antes no existia.
+
+Documentacion completa, guia del administrador y del cliente, y explicacion de
+los certificados: **[dnsreverse/README.md](dnsreverse/README.md)**.
+
+### Instalar
+
+Son dos partes: el panel y **cada nodo**. Las dos hacen falta.
+
+```bash
+# 1. EN EL PANEL
+git clone https://github.com/russellxz/pterodactyl-log-extencion.git /opt/pterodactyl-log-extencion
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install.sh
+
+# 2. EN CADA NODO (por SSH, en la maquina donde corre wings)
+git clone https://github.com/russellxz/pterodactyl-log-extencion.git /opt/pterodactyl-log-extencion
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/wings/install-wings.sh
+```
+
+Si tu panel no esta en `/var/www/pterodactyl`, pasa la ruta al final:
+`sudo bash .../dnsreverse/install.sh /ruta/de/tu/panel`
+
+> Si ya tenias la version antigua, **no se borra nada**: los dominios que tus
+> clientes ya tienen creados aparecen solos en cuanto termina la instalacion.
+
+### Actualizar
+
+```bash
+# EN EL PANEL
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/update.sh
+
+# EN CADA NODO, solo si el panel avisa de que hace falta
+# (Admin -> DNS Reverse -> Nodos te lo dice)
+cd /opt/pterodactyl-log-extencion && git pull
+sudo bash dnsreverse/wings/install-wings.sh
+```
+
+No se pierde nada: dominios, tokens, certificados, limites y DNS de clientes
+siguen igual.
+
+### Desinstalar
+
+```bash
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/uninstall.sh
+```
+
+**Por defecto no borra ningun dato.** Los DNS de tus clientes, tus dominios,
+tokens y certificados se conservan, y los dominios siguen funcionando en los
+nodos. Si vuelves a instalar, reaparece todo tal cual estaba.
+
+Para borrar de verdad (piensalo dos veces):
+
+```bash
+sudo bash dnsreverse/uninstall.sh --borrar-config              # + dominios, tokens y certificados
+sudo bash dnsreverse/uninstall.sh --borrar-config --borrar-dns # + los DNS de los clientes
+```
+
+### Despues de actualizar el panel
+
+El paquete oficial de Pterodactyl reemplaza `config/app.php`, que es donde se
+registra la extension. Los archivos y **la base de datos no se tocan**, pero la
+extension deja de cargarse hasta que se vuelve a registrar:
+
+```bash
+cd /var/www/pterodactyl
+php app/Extensions/DnsReverse/tools/register-provider.php .
+
+# y, si quieres asegurarte de que los nodos estan al dia:
+php artisan dnsreverse:sync
+```
+
+O directamente `sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install.sh`,
+que hace eso y ademas repasa migraciones y permisos.
+
+### Comprobar que todo esta bien
+
+```bash
+cd /var/www/pterodactyl && php artisan dnsreverse:doctor
+```
+
+---
+
 # Logs Pterodactyl
 
 Extension para el panel de **Pterodactyl** compatible con el tema **Arix**.
