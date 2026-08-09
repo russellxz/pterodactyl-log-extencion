@@ -8,7 +8,17 @@ los correos que salen (y los que no), el envio de correos a los clientes, el
 consumo real de cada servidor con nombre y correo de su dueno, y la
 actualizacion del panel con respaldo y vuelta atras.
 
-> **Novedades de la 1.3.0.** Se actualiza con `sudo bash update.sh`.
+> **Novedades de la 1.3.1.** Se actualiza con `sudo bash update.sh`.
+>
+> - **Limpieza del nodo al parar.** Ahora el contenedor colgado se elimina
+>   cuando se para la instalacion (por tiempo, por el boton del cliente o por
+>   el tuyo), no solo cuando ya ha fallado un reintento. Es lo que hace que el
+>   cliente reinstale y le funcione a la primera.
+> - **"Otras extensiones" ya no lista carpetas del propio Pterodactyl**
+>   (Backups, Themes, Illuminate, League...). Salian nueve como si fueran
+>   addons tuyos.
+>
+> **De la 1.3.0:**
 >
 > - **Acceso SSH a los nodos**: la extension entra en la maquina y suelta ella
 >   misma el bloqueo de instalacion de wings, en vez de limitarse a decirte que
@@ -454,10 +464,20 @@ Pantalla **Otras extensiones**. Detecta lo que tengas instalado en el panel
 aparte de esta extension:
 
 - `app/Extensions/<Nombre>` (extensiones con codigo propio)
+- `app/Http/Controllers/Admin/Extensions/<nombre>` y
+  `resources/views/admin/extensions/<nombre>` (addons que cuelgan de las
+  carpetas del panel)
 - `public/extensions/<nombre>` (sus js, css e imagenes)
 - `.blueprint/extensions/<nombre>` (las instaladas con **Blueprint**, que es
   como viene la mayoria de addons de pago)
 - y las **lineas de proveedor** de `config/app.php`
+
+> **Ojo con `app/Extensions`**: esa carpeta la trae el propio Pterodactyl y
+> dentro estan SUS clases (`Backups`, `Themes`, `Illuminate`, `League`...).
+> No son addons tuyos. Para no llenarte la lista de basura, solo se cuenta como
+> extension lo que da una senal clara de serlo: que registre un
+> `ServiceProvider`, que aparezca en `config/app.php`, o que traiga su propio
+> `composer.json`.
 
 Ese ultimo punto es el importante: actualizar Pterodactyl trae su propio
 `config/app.php` y **se lleva por delante esas lineas**. Las carpetas de la
@@ -557,10 +577,23 @@ cerrado, la maquina no responde...). Uselo siempre despues de guardar.
 Si conecta pero falta algo, sale en naranja diciendo que falta: por ejemplo que
 ese usuario no puede usar docker, o que wings esta parado.
 
-**Casilla "arreglarlo solo"**: si la marcas, en cuanto se detecte que el nodo
-esta rechazando instalaciones por tener el contenedor anterior colgado, la
-extension entra, comprueba que sigue vivo y lo mata. Sin marcarla, tienes el
-boton **"Hacerlo por mi (SSH)"** en el aviso de *Instalaciones*.
+**Casilla "limpiar el nodo automaticamente"**: es la que lo cambia todo.
+Marcala y, **cada vez que se pare una instalacion**, la extension entra en el
+nodo y elimina el contenedor de instalacion que se quedo colgado. Las tres
+formas de parar valen:
+
+- cuando el **sistema automatico** corta al pasar los minutos que configuraste
+- cuando el **cliente** pulsa *Parar la instalacion*
+- cuando **tu** paras una desde *Instalaciones*
+
+Esto es lo que hace que el cliente pueda reinstalar y le funcione **a la
+primera**. Sin ello el panel queda bien, pero wings sigue con su bloqueo puesto
+y la siguiente instalacion se rechaza.
+
+Si el nodo no responde en ese momento, la parada se hace igual (el cliente
+queda desbloqueado y con puerto nuevo) y se te avisa de que el nodo no se pudo
+limpiar. Sin marcar la casilla, tienes el boton **"Hacerlo por mi (SSH)"** en
+el aviso de *Instalaciones*.
 
 Tambien hay un **Reiniciar wings** para cuando ni matando el contenedor se
 arregla. Los servidores siguen encendidos; solo se corta la consola unos

@@ -218,6 +218,21 @@ class InstallGuard
             $this->armUnblockGuard($event);
         }
 
+        // 5b) Y el paso que de verdad lo arregla: matar en el nodo el
+        //     contenedor de instalacion que se quedo colgado.
+        //
+        //     Sin esto, el panel queda bien pero wings sigue con su bloqueo
+        //     puesto y la siguiente instalacion que intente el cliente se
+        //     rechaza al instante. Se hace tanto si la parada la ordena el
+        //     sistema al cumplirse el tiempo configurado, como si le da al
+        //     boton el cliente: en los dos casos el problema es el mismo.
+        $limpieza = $this->fixNode($event);
+
+        if ($limpieza !== null && !$limpieza['ok']) {
+            $warnings[] = 'No se pudo limpiar el contenedor de instalacion en el nodo: '
+                . mb_substr((string) ($limpieza['error'] ?: trim($limpieza['salida'])), 0, 160);
+        }
+
         ExtensionEvent::log('warning', 'installs', sprintf(
             'Instalacion detenida en "%s" tras %d minutos (%s)',
             $server->name,
@@ -786,6 +801,9 @@ class InstallGuard
      * Solo se hace si el administrador ha guardado el acceso de ese nodo y ha
      * marcado "arreglarlo solo". Sin eso, la extension se limita a decir que
      * comando hay que ejecutar.
+     *
+     * @return array{ok: bool, salida: string, error: ?string}|null
+     *         null si no habia nada que hacer o no hay acceso configurado
      */
     public function fixNode(InstallEvent $event): ?array
     {
@@ -813,7 +831,10 @@ class InstallGuard
                     'error' => $estado['error'],
                 ], $event->server_id);
 
-                return null;
+                // Se devuelve el fallo, no null: quien haya pedido la parada
+                // tiene que enterarse de que el nodo no se pudo limpiar. Si no,
+                // el mensaje sale en verde y parece que quedo todo hecho.
+                return ['ok' => false, 'salida' => '', 'error' => $estado['error']];
             }
 
             if (!$estado['existe']) {
@@ -825,17 +846,18 @@ class InstallGuard
 
             $event->forceFill([
                 'notes' => trim((string) $event->notes) . ($resultado['ok']
-                    ? ' | La extension entro en el nodo y elimino el contenedor colgado: el servidor ya se puede reinstalar.'
+                    ? ' | La extension entro en el nodo por SSH y elimino el contenedor de instalacion colgado: el servidor ya se puede reinstalar.'
                     : ' | Se intento eliminar el contenedor en el nodo y no se pudo: ' . mb_substr((string) ($resultado['error'] ?: $resultado['salida']), 0, 200)),
             ])->save();
 
             if ($resultado['ok']) {
                 ExtensionEvent::log('info', 'nodos', sprintf(
-                    'Bloqueo de instalacion liberado solo en el nodo "%s" para "%s"',
+                    'Contenedor de instalacion colgado eliminado en el nodo "%s" para "%s"',
                     $event->node_name ?: '?',
                     $event->server_name ?: '?'
                 ), [
                     'contenedor_que_estaba_colgado' => $estado['detalle'],
+                    'quien_lo_pidio' => $event->cancelled_by ?: 'la deteccion automatica',
                 ], $event->server_id);
             }
 
@@ -845,7 +867,7 @@ class InstallGuard
                 'error' => mb_substr($e->getMessage(), 0, 300),
             ], $event->server_id);
 
-            return null;
+            return ['ok' => false, 'salida' => '', 'error' => mb_substr($e->getMessage(), 0, 300)];
         }
     }
 
