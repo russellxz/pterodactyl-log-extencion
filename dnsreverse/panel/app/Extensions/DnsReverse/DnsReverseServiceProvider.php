@@ -118,6 +118,7 @@ class DnsReverseServiceProvider extends ServiceProvider
             Console\Commands\SyncCommand::class,
             Console\Commands\RenewCertificatesCommand::class,
             Console\Commands\UiModeCommand::class,
+            Console\Commands\ArixLinkCommand::class,
         ]);
     }
 

@@ -85,6 +85,18 @@ command -v php >/dev/null 2>&1 || { err "No se encontro el comando php."; exit 1
 
 ok "Panel encontrado en $PANEL"
 
+# El tema Arix cambia las reglas: el menu del cliente no sale de routes.ts sino
+# de una lista de enlaces suya guardada en la base de datos. Se detecta aqui
+# para tratarlo como es debido mas abajo.
+ARIX=0
+
+if [ -f "$PANEL/config/arixTheme.php" ] \
+   || [ -f "$PANEL/app/Http/ViewComposers/ArixConfiguration.php" ] \
+   || [ -d "$PANEL/app/Http/Controllers/Admin/Arix" ]; then
+    ARIX=1
+    ok "Tema Arix detectado (se anadira tambien a su menu de enlaces)"
+fi
+
 SELLO="$(date +%Y%m%d-%H%M%S)"
 RESPALDO="$PANEL/storage/dnsreverse-frontend-$SELLO"
 
@@ -215,6 +227,12 @@ if [ "$QUITAR" -eq 1 ]; then
     rm -rf "$DESTINO"
     ok "Componente y ruta quitados"
 
+    if [ "$ARIX" -eq 1 ]; then
+        php "$PANEL/artisan" dnsreverse:arix remove >/dev/null 2>&1 \
+            && ok "Enlace quitado del menu del tema Arix" \
+            || warn "No se pudo quitar el enlace de Arix (quitalo en Admin -> Arix -> Links)"
+    fi
+
     title "3. Recompilando el panel sin DNS Reverse"
 
     if ! dependencias; then
@@ -313,6 +331,18 @@ if php "$PANEL/artisan" dnsreverse:ui native; then
 else
     warn "No se pudo cambiar el modo automaticamente."
     warn "Hazlo a mano en Admin -> DNS Reverse -> Ajustes: desmarca 'Pantalla del cliente'."
+fi
+
+# El tema Arix no saca el menu del cliente de routes.ts: lo saca de su propia
+# lista de enlaces guardada en la base de datos. Asi que ademas de la ruta hay
+# que anadirle el enlace, que es como el tema anade sus apartados.
+if [ "$ARIX" -eq 1 ]; then
+    if php "$PANEL/artisan" dnsreverse:arix add; then
+        ok "Enlace anadido al menu del tema Arix"
+    else
+        warn "No se pudo anadir el enlace al menu de Arix."
+        warn "Ponlo a mano en Admin -> Arix -> Links, con la url /dnsreverse"
+    fi
 fi
 
 ajustar_permisos
