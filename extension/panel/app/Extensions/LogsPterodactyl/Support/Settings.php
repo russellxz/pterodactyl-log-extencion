@@ -20,15 +20,12 @@ class Settings
         // --- Vigilante de instalaciones atascadas ---
         'watchdog_enabled' => '1',
         'watchdog_minutes' => '10',
-        // fail            -> solo marca la instalacion como fallida
-        // fail_rotate     -> marca fallida y cambia el puerto
-        // force_rotate    -> ademas borra el servidor en wings, que es lo unico
-        //                    que corta de verdad el contenedor de instalacion
+        // fail        -> solo detiene la instalacion
+        // fail_rotate -> la detiene y ademas cambia el puerto (recomendado)
         //
-        // El modo forzado es el de por defecto justamente porque los otros dos
-        // no paran nada en el nodo: el contenedor sigue trabajando y al acabar
-        // avisa al panel, con lo que el cliente vuelve a ver "instalando".
-        'watchdog_action' => 'force_rotate',
+        // Nunca se borra el servidor: se queda en su sitio para que el cliente
+        // revise sus datos de arranque y lo reinstale el mismo.
+        'watchdog_action' => 'fail_rotate',
         'watchdog_notify_owner' => '1',
         'watchdog_same_ip' => '1',
 
@@ -36,18 +33,17 @@ class Settings
         'client_cancel_enabled' => '1',
         'client_cancel_minutes' => '10',
         'client_cancel_rotate_port' => '1',
-        // Cuando el cliente pulsa "detener", ¿se corta de raiz? Si esta a 0 el
-        // boton solo marca la instalacion como fallida y el contenedor del
-        // nodo sigue vivo, que es justo lo que hace que parezca que no paso nada.
-        'client_cancel_force' => '1',
-        // Deja que el cliente relance la instalacion desde el mismo aviso.
-        'client_can_reinstall' => '1',
 
         // --- Registro de correos ---
         'mail_log_enabled' => '1',
         'mail_log_store_body' => '1',
         'mail_log_retention_days' => '60',
         'mail_logo_url' => '',
+        // marco  -> el HTML del administrador va dentro de la plantilla de serie
+        // custom -> el marco lo escribe el administrador (usa {{contenido}})
+        // raw    -> se envia el HTML tal cual, sin nada alrededor
+        'mail_template_mode' => 'marco',
+        'mail_template_html' => '',
 
         // --- Monitor de recursos ---
         'resources_enabled' => '1',

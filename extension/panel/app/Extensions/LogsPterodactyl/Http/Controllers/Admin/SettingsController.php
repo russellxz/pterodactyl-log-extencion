@@ -22,9 +22,8 @@ class SettingsController extends Controller
         return view('logspterodactyl::admin.settings', [
             'settings' => $this->settings,
             'modes' => [
-                InstallGuard::MODE_FAIL => 'Solo marcar la instalacion como fallida',
-                InstallGuard::MODE_FAIL_ROTATE => 'Marcar como fallida y cambiar el puerto (recomendado)',
-                InstallGuard::MODE_FORCE_ROTATE => 'Forzado: ademas borrar el servidor en el nodo para cortar el contenedor',
+                InstallGuard::MODE_FAIL => 'Solo detener la instalacion, sin tocar el puerto',
+                InstallGuard::MODE_FAIL_ROTATE => 'Detener la instalacion y cambiar el puerto (recomendado)',
             ],
         ]);
     }
@@ -34,15 +33,13 @@ class SettingsController extends Controller
         $data = $request->validate([
             'watchdog_enabled' => 'nullable|boolean',
             'watchdog_minutes' => 'required|integer|min:1|max:1440',
-            'watchdog_action' => 'required|in:fail,fail_rotate,force_rotate',
+            'watchdog_action' => 'required|in:fail,fail_rotate',
             'watchdog_notify_owner' => 'nullable|boolean',
             'watchdog_same_ip' => 'nullable|boolean',
 
             'client_cancel_enabled' => 'nullable|boolean',
             'client_cancel_minutes' => 'required|integer|min:1|max:1440',
             'client_cancel_rotate_port' => 'nullable|boolean',
-            'client_cancel_force' => 'nullable|boolean',
-            'client_can_reinstall' => 'nullable|boolean',
 
             'mail_log_enabled' => 'nullable|boolean',
             'mail_log_store_body' => 'nullable|boolean',
@@ -73,7 +70,7 @@ class SettingsController extends Controller
         // Las casillas que no se marcan no llegan en la peticion.
         foreach ([
             'watchdog_enabled', 'watchdog_notify_owner', 'watchdog_same_ip',
-            'client_cancel_enabled', 'client_cancel_rotate_port', 'client_cancel_force', 'client_can_reinstall',
+            'client_cancel_enabled', 'client_cancel_rotate_port',
             'mail_log_enabled', 'mail_log_store_body', 'resources_enabled',
         ] as $flag) {
             $data[$flag] = $request->boolean($flag) ? '1' : '0';

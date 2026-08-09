@@ -214,7 +214,7 @@ El problema de los servidores que se quedan tres dias "instalando".
 revisa si hay instalaciones que pasen del tiempo configurado. Cuando una lo
 pasa:
 
-1. **Corta la instalacion de raiz** en el nodo.
+1. **Detiene la instalacion** (el panel deja de considerarlo "instalando").
 2. Cambia el puerto a otro libre del mismo nodo, intentando mantener la IP.
 3. Avisa al dueno por correo diciendole que revise el token, el usuario y si
    el repositorio es privado.
@@ -223,41 +223,38 @@ pasa:
 **Aviso al cliente**: cuando su servidor pasa de los minutos configurados, le
 sale una tarjeta con iconos (sin emojis) recordandole revisar el token, el
 nombre de usuario, si el repositorio es privado y si la version existe, con un
-boton para **detener la instalacion**. Una vez detenida, la misma tarjeta le
-ofrece **volver a instalar** cuando haya corregido sus datos.
+boton para **parar la instalacion**. Una vez parada, la tarjeta le dice cual es
+su nueva direccion y que reinstale desde *Ajustes* cuando lo tenga corregido.
 
 **Control manual**: desde el admin puedes parar cualquier instalacion en curso
-al momento.
+al momento, con o sin cambio de puerto.
 
-#### Como se para de verdad una instalacion
+#### Que hace exactamente al parar
 
-wings **no tiene ninguna orden para cancelar una instalacion en marcha**. Su
-API solo expone `power`, `commands`, `install`, `reinstall`, `sync` y `delete`,
-y `power` se rechaza mientras el servidor esta instalando.
+1. El panel deja de considerar el servidor "instalando". Eso desbloquea la
+   pantalla del cliente al momento.
+2. Se le cambia el puerto a otro libre del mismo nodo.
+3. Se avisa al dueno por correo y queda todo registrado.
 
-Por eso, marcar la instalacion como fallida en el panel **no para nada**: el
-contenedor del nodo sigue trabajando y cuando termina avisa al panel, que
-vuelve a mover el estado. El cliente pulsa "detener", parece que funciona, y al
-rato vuelve a ver "instalando".
+Y lo que **no** hace, a proposito: **no borra nada**. Ni el servidor, ni sus
+archivos, ni en el panel ni en el nodo. El servidor se queda donde esta, con su
+puerto nuevo, para que el cliente revise sus datos de arranque y lo reinstale el
+mismo con el boton de siempre del panel (*Ajustes -> Reinstalar servidor*).
 
-La unica forma real de cortarlo es **borrar el servidor en el nodo**: eso
-destruye el entorno y con el el contenedor de instalacion. Es lo que hace el
-**modo forzado**, que viene activado por defecto tanto para el sistema
-automatico como para el boton del cliente.
+Un apunte honesto sobre el contenedor: wings no expone ninguna orden para
+cancelar una instalacion en marcha (su API solo tiene `power`, `commands`,
+`install`, `reinstall`, `sync` y `delete`, y `power` se rechaza mientras
+instala). La unica forma de matar el contenedor seria borrar el servidor en el
+nodo, y eso borraria tambien sus archivos, asi que no se hace. El contenedor
+colgado termina por su cuenta; para entonces el cliente lleva rato pudiendo
+trabajar, que es lo que importa.
 
-| Modo | Que hace | ¿Para el contenedor? |
-|---|---|---|
-| Solo marcar como fallida | El panel deja de considerarlo "instalando". | **No** |
-| Marcar y cambiar puerto | Lo anterior + puerto nuevo. | **No** |
-| **Forzado** (por defecto) | Ademas borra el servidor en el nodo. | **Si** |
+| Modo | Que hace |
+|---|---|
+| **Parar y cambiar puerto** (por defecto) | Detiene la instalacion y mueve el servidor a otro puerto. |
+| Solo parar | Detiene la instalacion sin tocar el puerto. |
 
-Como en modo forzado el servidor deja de existir en el nodo, el boton nativo de
-"reinstalar" del panel daria un 404. Por eso la extension pone su propio boton
-**"Recrear en el nodo"** (admin) y **"Volver a instalar"** (cliente), que lo
-crean de nuevo y lanzan la instalacion en un paso.
-
-Los archivos que se pierden son los de una instalacion que nunca termino, o
-sea, ninguno que importe.
+El sistema automatico y el boton del cliente hacen exactamente lo mismo.
 
 ### 3. Seguimiento de los reintentos
 
@@ -304,6 +301,19 @@ registro no deja un token de acceso a la vista.
   en la cabecera de todos los correos.
 - Marcadores que se sustituyen en cada envio: `{{nombre}}`, `{{correo}}` y
   `{{panel}}`.
+- **Colores y estilos**: puedes usar cualquier HTML con estilos en linea
+  (`<p style="color:#e63946">`). Se respetan tal cual.
+- **Plantilla a tu gusto**, con tres opciones:
+  - *El marco de serie*: cabecera con tu logo y pie automatico.
+  - *Mi propia plantilla*: escribes el HTML completo del correo y pones
+    `{{contenido}}` donde quieras que entre el mensaje. Hay un boton para
+    cargar la de serie y editarla en vez de empezar de cero. Ahi tambien valen
+    `{{logo}}`, `{{panel}}`, `{{url}}`, `{{nombre}}` y `{{correo}}`.
+  - *Sin marco*: se envia exactamente el HTML que escribas, sin nada alrededor.
+
+  Aviso practico: en los correos los estilos van **en linea** y la maquetacion
+  con `<table>`. Gmail y Outlook ignoran las hojas de estilo y no entienden
+  flexbox ni grid.
 - Se manda **uno por uno**, asi ningun cliente ve la direccion de los demas.
 - Cada envio queda agrupado como campana: cuantos salieron y cuantos fallaron.
 
@@ -422,16 +432,26 @@ registro. Se arregla con:
 cd pterodactyl-log-extencion && sudo bash update.sh
 ```
 
-### El boton de detener dice que si pero la instalacion sigue
+### El boton de parar dice que si pero el panel sigue igual
 
-Comprueba en **Configuracion** que esta marcado *"Cortar de raiz cuando lo
-detiene el cliente"*. Sin eso, el panel solo marca la instalacion como fallida
-y el contenedor del nodo sigue trabajando. Con eso marcado se borra el servidor
-en el nodo y se corta de verdad.
+Lo que hace parar es quitarle al servidor el estado "instalando" y cambiarle el
+puerto. Si tras pulsarlo sigues viendo la pantalla de instalacion, es que el
+navegador tiene el estado viejo en memoria: recarga con Ctrl+F5. La extension
+recarga sola, pero si la pagina estaba abierta de antes puede tardar un ciclo.
 
-Si aun asi sigue, mira el registro de la extension (pestana **Registro**): si
-la orden a wings fallo, ahi aparece el motivo (normalmente el panel no llega al
-nodo).
+Comprueba en **Instalaciones** que ese servidor ya no sale en "instalando ahora
+mismo", y en **Registro** que la parada quedo anotada. Si la orden al nodo
+fallo, el motivo aparece ahi (normalmente el panel no llega a wings).
+
+### El panel sigue diciendo "Running Installer" despues de detenerla
+
+La aplicacion del panel guarda el estado del servidor en memoria y no lo vuelve
+a pedir sola. La extension lo detecta y recarga la pagina automaticamente, pero
+si la tenias abierta de antes puede que veas la pantalla vieja: recarga con
+Ctrl+F5 (o tirando hacia abajo en el movil).
+
+Para saber que dice de verdad la base de datos, entra en **Instalaciones**: si
+no hay ninguna en curso, ahi mismo aparece el recuento de servidores por estado.
 
 ### El corte automatico no salta
 
@@ -442,6 +462,16 @@ Comprueba que esta activado en Configuracion y que el cron del panel corre.
 
 Tiene que estar activado en Configuracion, el servidor tiene que llevar mas
 minutos de los configurados, y quien mira tiene que ser el **dueno**.
+
+### "Instalaciones" no detecta ninguna instalacion en curso
+
+En esa pantalla, cuando la lista sale vacia, se muestra el recuento de
+servidores por estado leido directamente de la base de datos. Si ahi no hay
+ninguno en `installing`, es que la instalacion ya termino (bien o mal) y lo que
+ves en el navegador es la pantalla sin refrescar.
+
+Si sale un error en rojo, ese es el motivo real y aparece tambien en la pestana
+**Registro**.
 
 ### La tabla de consumo dice que el nodo no responde
 

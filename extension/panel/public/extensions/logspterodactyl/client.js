@@ -14,7 +14,7 @@
 
     var config = window.LogsPterodactylConfig || {};
     var ENDPOINT = (config.endpoint || '/api/logspterodactyl').replace(/\/$/, '');
-    var POLL_MS = 20000;
+    var POLL_MS = 10000;
 
     var state = {
         server: null,
@@ -22,6 +22,8 @@
         card: null,
         cardMode: null,
         busy: false,
+        wasInstalling: false,
+        reloaded: false,
         dismissed: {},
         lastPath: null,
     };
@@ -99,7 +101,7 @@
     // --- Tarjeta ------------------------------------------------------------
 
     function build(data) {
-        return data.mode === 'failed' ? buildFailed(data) : buildStuck(data);
+        return data.mode === 'stopped' ? buildStopped(data) : buildStuck(data);
     }
 
     function shell(inner) {
@@ -138,8 +140,8 @@
             '  </p>' + CHECKLIST +
             '  <div class="logspterodactyl-actions">' +
             '    <button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger">' +
-            icon('stop', 16) + '<span>Detener la instalacion</span></button>' +
-            '    <span class="logspterodactyl-hint">Se cortara del todo y podras corregir los datos.</span>' +
+            icon('stop', 16) + '<span>Parar la instalacion</span></button>' +
+            '    <span class="logspterodactyl-hint">Se para y tu servidor pasa a otro puerto. No se borra nada.</span>' +
             '  </div>' +
             '  <div class="logspterodactyl-result" hidden></div>'
         );
@@ -156,25 +158,27 @@
         return wrapper;
     }
 
-    // Tarjeta 2: la instalacion fallo (o la paramos) y se ofrece relanzarla.
-    function buildFailed(data) {
+    // Tarjeta 2: la instalacion se detuvo. Aqui no se ofrece nada mas: el
+    // servidor sigue en su sitio con su puerto nuevo, y el cliente reinstala
+    // el mismo desde el panel cuando haya corregido sus datos.
+    function buildStopped(data) {
         var wrapper = shell(
             '  <div class="logspterodactyl-head">' +
-            '    <span class="logspterodactyl-badge logspterodactyl-badge-danger">' + icon('alert', 18) + '</span>' +
+            '    <span class="logspterodactyl-badge logspterodactyl-badge-ok">' + icon('check', 18) + '</span>' +
             '    <div>' +
-            '      <h3 class="logspterodactyl-title">La instalacion no se completo</h3>' +
+            '      <h3 class="logspterodactyl-title">Instalacion detenida</h3>' +
             '      <p class="logspterodactyl-subtitle">' + icon('clock', 14) +
-            '        <span>Corrige los datos de arranque y vuelve a intentarlo.</span>' +
+            '        <span>Revisa tus datos y vuelve a instalar cuando quieras.</span>' +
             '      </p>' +
             '    </div>' +
             '  </div>' +
+            (data.address
+                ? '  <p class="logspterodactyl-lead">Tu servidor esta ahora en <strong>' +
+                  escapeHtml(data.address) + '</strong>.</p>'
+                : '') +
             '  <p class="logspterodactyl-lead">Repasa esto antes de volver a instalar:</p>' + CHECKLIST +
-            '  <div class="logspterodactyl-actions">' +
-            '    <button type="button" class="logspterodactyl-btn logspterodactyl-btn-primary">' +
-            icon('refresh', 16) + '<span>Volver a instalar</span></button>' +
-            '    <span class="logspterodactyl-hint">Tarda unos minutos.</span>' +
-            '  </div>' +
-            '  <div class="logspterodactyl-result" hidden></div>'
+            '  <p class="logspterodactyl-hint">Cuando lo tengas corregido, entra en ' +
+            '<strong>Ajustes</strong> y pulsa <strong>Reinstalar servidor</strong>.</p>'
         );
 
         wrapper.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
@@ -182,45 +186,7 @@
             remove();
         });
 
-        wrapper.querySelector('.logspterodactyl-btn-primary').addEventListener('click', function () {
-            doReinstall(wrapper, data);
-        });
-
         return wrapper;
-    }
-
-    function doReinstall(wrapper, data) {
-        if (state.busy) { return; }
-        state.busy = true;
-
-        var actions = wrapper.querySelector('.logspterodactyl-actions');
-        actions.innerHTML =
-            '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-primary" disabled>' +
-            '<span class="logspterodactyl-spin">' + icon('spinner', 16) + '</span>' +
-            '<span>Lanzando...</span></button>';
-
-        request('POST', '/server/' + encodeURIComponent(data.serverId) + '/reinstall', function (status, payload) {
-            state.busy = false;
-            var result = wrapper.querySelector('.logspterodactyl-result');
-            result.hidden = false;
-
-            if (status >= 200 && status < 300 && payload && payload.ok) {
-                actions.innerHTML = '';
-                result.className = 'logspterodactyl-result logspterodactyl-result-ok';
-                result.innerHTML = icon('check', 16) + '<span>' + escapeHtml(payload.message) + '</span>';
-                window.setTimeout(function () { window.location.reload(); }, 3000);
-                return;
-            }
-
-            result.className = 'logspterodactyl-result logspterodactyl-result-error';
-            result.innerHTML = icon('alert', 16) + '<span>' +
-                escapeHtml((payload && payload.error) || 'No se pudo relanzar la instalacion.') + '</span>';
-            actions.innerHTML = '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-primary">' +
-                icon('refresh', 16) + '<span>Reintentar</span></button>';
-            actions.querySelector('.logspterodactyl-btn-primary').addEventListener('click', function () {
-                doReinstall(wrapper, data);
-            });
-        });
     }
 
     function confirmCancel(wrapper, data) {
@@ -235,7 +201,7 @@
             '<span class="logspterodactyl-confirm-text">¿Seguro que quieres detenerla?</span>' +
             '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger logspterodactyl-confirm-yes">' +
             icon('check', 16) +
-            '<span>Si, detener</span></button>' +
+            '<span>Si, parar</span></button>' +
             '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-ghost logspterodactyl-confirm-no">' +
             '<span>Cancelar</span></button>';
 
@@ -244,8 +210,8 @@
             actions.innerHTML =
                 '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger">' +
                 icon('stop', 16) +
-                '<span>Detener la instalacion</span></button>' +
-                '<span class="logspterodactyl-hint">Podras corregir los datos y volver a instalar.</span>';
+                '<span>Parar la instalacion</span></button>' +
+                '<span class="logspterodactyl-hint">No se borra nada.</span>';
             actions.querySelector('.logspterodactyl-btn-danger').addEventListener('click', function () {
                 confirmCancel(wrapper, data);
             });
@@ -267,7 +233,7 @@
         actions.innerHTML =
             '<button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger" disabled>' +
             '<span class="logspterodactyl-spin">' + icon('spinner', 16) + '</span>' +
-            '<span>Deteniendo...</span></button>';
+            '<span>Parando...</span></button>';
 
         request('POST', '/server/' + encodeURIComponent(data.serverId) + '/cancel-install', function (status, payload) {
             state.busy = false;
@@ -290,6 +256,8 @@
                     result.innerHTML += '<span class="logspterodactyl-hint">' +
                         escapeHtml(payload.warnings.join(' ')) + '</span>';
                 }
+
+                state.wasInstalling = true;
 
                 // La aplicacion del panel guarda el estado del servidor en
                 // memoria, asi que hay que recargar para que deje de mostrar
@@ -376,6 +344,8 @@
         // Al cambiar de servidor (el panel es una SPA) se limpia la tarjeta.
         if (server !== state.server) {
             state.server = server;
+            state.wasInstalling = false;
+            state.reloaded = false;
             remove();
         }
 
@@ -393,6 +363,8 @@
             }
 
             if (payload.installing) {
+                state.wasInstalling = true;
+
                 if (!payload.can_cancel) {
                     remove();
                     return;
@@ -402,9 +374,18 @@
                 return;
             }
 
-            // No esta instalando. Si acaba de fallar se ofrece relanzarla.
-            if (payload.failed && payload.can_reinstall) {
-                show({ serverId: server, mode: 'failed' });
+            // Ya no esta instalando. Si la pagina se cargo cuando si lo estaba,
+            // la aplicacion del panel sigue ensenando "Running Installer"
+            // porque guarda el estado en memoria: hay que recargar.
+            if (state.wasInstalling && !state.reloaded) {
+                state.reloaded = true;
+                window.location.reload();
+                return;
+            }
+
+            // Si la instalacion acabo mal, se explica que hacer.
+            if (payload.failed) {
+                show({ serverId: server, mode: 'stopped', address: payload.address });
                 return;
             }
 

@@ -233,6 +233,76 @@
             </div>
         </div>
     </div>
+
+    {{-- Plantilla con la que se envuelven los correos --}}
+    <div class="row">
+        <div class="col-md-12">
+            <div class="box">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Plantilla de los correos</h3>
+                </div>
+                <form method="POST" action="{{ route('admin.logspterodactyl.compose.template') }}">
+                    {{ csrf_field() }}
+                    <div class="box-body">
+                        <p class="text-muted">
+                            El mensaje que escribes arriba va dentro de un marco (cabecera con el logo,
+                            fondo, pie...). Aqui decides cual.
+                        </p>
+
+                        <label class="logspterodactyl-switch">
+                            <input type="radio" name="mail_template_mode" value="marco" class="lp-modo"
+                                   @if($templateMode === 'marco') checked @endif>
+                            <span><strong>El marco de serie</strong> &mdash; cabecera con tu logo y pie automatico.</span>
+                        </label>
+
+                        <label class="logspterodactyl-switch">
+                            <input type="radio" name="mail_template_mode" value="custom" class="lp-modo"
+                                   @if($templateMode === 'custom') checked @endif>
+                            <span><strong>Mi propia plantilla</strong> &mdash; la escribes tu abajo y el mensaje se mete donde pongas <code>@{{contenido}}</code>.</span>
+                        </label>
+
+                        <label class="logspterodactyl-switch">
+                            <input type="radio" name="mail_template_mode" value="raw" class="lp-modo"
+                                   @if($templateMode === 'raw') checked @endif>
+                            <span><strong>Sin marco</strong> &mdash; se envia exactamente el HTML que escribas al redactar, sin nada alrededor.</span>
+                        </label>
+
+                        <div id="lp-plantilla-box" class="form-group" style="margin-top:14px;">
+                            <label for="mail_template_html">Tu plantilla (HTML completo)</label>
+                            <textarea name="mail_template_html" id="mail_template_html"
+                                      class="form-control logspterodactyl-editor" rows="16">{{ $templateHtml }}</textarea>
+
+                            <div class="logspterodactyl-toolbar">
+                                <button type="button" class="btn btn-sm btn-default" id="lp-cargar-serie">
+                                    @logsicon('download', 14) Cargar la de serie para editarla
+                                </button>
+                                <span class="logspterodactyl-muted logspterodactyl-small">
+                                    Obligatorio incluir <code>@{{contenido}}</code>.
+                                </span>
+                            </div>
+
+                            <div class="logspterodactyl-note logspterodactyl-note-info" style="margin-top:12px;">
+                                @logsicon('mail', 16)
+                                <span>
+                                    Marcadores que puedes usar tambien aqui: <code>@{{contenido}}</code> (el mensaje),
+                                    <code>@{{logo}}</code> (la URL del logo que subas), <code>@{{panel}}</code>,
+                                    <code>@{{url}}</code> (direccion del panel), <code>@{{nombre}}</code> y <code>@{{correo}}</code>.
+                                    <br><br>
+                                    Consejo: en los correos los estilos van <strong>en linea</strong>
+                                    (<code>style="color:#e63946"</code>) y la maquetacion con
+                                    <code>&lt;table&gt;</code>. Gmail y Outlook ignoran las hojas de estilo
+                                    y no entienden flexbox ni grid.
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="box-footer">
+                        <button type="submit" class="btn btn-primary">@logsicon('check', 14) Guardar plantilla</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 @endsection
 
 @section('logspterodactyl-scripts')
@@ -436,6 +506,37 @@
 
             refrescarModo();
             pintarChips();
+
+            // --- Plantilla ---
+
+            var plantillaSerie = @json($defaultTemplate);
+
+            function refrescarPlantilla() {
+                var marcado = document.querySelector('input[name="mail_template_mode"]:checked');
+                var caja = el('lp-plantilla-box');
+                if (caja && marcado) {
+                    caja.style.display = marcado.value === 'custom' ? '' : 'none';
+                }
+            }
+
+            var modos = document.querySelectorAll('.lp-modo');
+            for (var m = 0; m < modos.length; m++) {
+                modos[m].addEventListener('change', refrescarPlantilla);
+            }
+
+            var cargar = el('lp-cargar-serie');
+            if (cargar) {
+                cargar.addEventListener('click', function () {
+                    var campo = el('mail_template_html');
+                    if (campo.value.trim() !== '' &&
+                        !window.confirm('Se reemplazara lo que tengas escrito por la plantilla de serie. ¿Seguro?')) {
+                        return;
+                    }
+                    campo.value = plantillaSerie;
+                });
+            }
+
+            refrescarPlantilla();
         })();
     </script>
 @endsection

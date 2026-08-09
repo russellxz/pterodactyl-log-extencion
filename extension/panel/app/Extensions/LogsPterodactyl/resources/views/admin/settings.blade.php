@@ -53,15 +53,17 @@
                         </div>
 
                         <div class="logspterodactyl-note logspterodactyl-note-info">
-                            @logsicon('alert', 16)
+                            @logsicon('shield', 16)
                             <span>
-                                wings no tiene ninguna orden para cancelar una instalacion en marcha.
-                                En los dos primeros modos el panel marca la instalacion como fallida
-                                (que es lo que desbloquea la pantalla del cliente), pero el contenedor
-                                de instalacion del nodo puede seguir corriendo hasta que termine solo.
-                                El modo <strong>forzado</strong> borra el servidor en el nodo, que es la
-                                unica forma de cortar el contenedor de verdad; despues hay que usar
-                                "Recrear en el nodo" antes de volver a instalar.
+                                <strong>Nunca se borra nada.</strong> Al detener una instalacion el
+                                servidor se queda en su sitio con un puerto nuevo, para que el cliente
+                                revise sus datos de arranque y lo reinstale el mismo.
+                                <br><br>
+                                Un apunte honesto: wings no tiene ninguna orden para cancelar una
+                                instalacion en marcha, asi que el contenedor del nodo puede seguir
+                                trabajando hasta que termine por su cuenta. Lo que si se consigue al
+                                momento es que el cliente deje de ver la pantalla de "instalando" y
+                                pueda trabajar.
                             </span>
                         </div>
 
@@ -111,32 +113,14 @@
 
                         <div class="form-group">
                             <label class="logspterodactyl-switch">
-                                <input type="checkbox" name="client_cancel_force" value="1"
-                                       @if($settings->bool('client_cancel_force')) checked @endif>
-                                <span><strong>Cortar de raiz cuando lo detiene el cliente</strong> (recomendado)</span>
-                            </label>
-                            <p class="text-muted logspterodactyl-small">
-                                Sin esto, el boton solo marca la instalacion como fallida y el contenedor
-                                del nodo sigue trabajando: el cliente pulsa "detener", le decimos que si,
-                                y al rato vuelve a ver "instalando". Con esto activado se borra el servidor
-                                en el nodo, que es lo unico que corta el contenedor de verdad.
-                            </p>
-
-                            <label class="logspterodactyl-switch">
                                 <input type="checkbox" name="client_cancel_rotate_port" value="1"
                                        @if($settings->bool('client_cancel_rotate_port')) checked @endif>
                                 <span>Cambiar tambien el puerto cuando lo detiene el cliente</span>
                             </label>
-
-                            <label class="logspterodactyl-switch">
-                                <input type="checkbox" name="client_can_reinstall" value="1"
-                                       @if($settings->bool('client_can_reinstall')) checked @endif>
-                                <span>Dejar que el cliente relance la instalacion desde el mismo aviso</span>
-                            </label>
                             <p class="text-muted logspterodactyl-small">
-                                Hace falta para que pueda volver a instalar despues de un corte de raiz:
-                                el boton de reinstalar del panel daria un 404 porque el servidor ya no
-                                existe en el nodo.
+                                Al detenerla, el servidor se queda donde esta con su puerto nuevo. El
+                                cliente revisa sus datos de arranque y vuelve a instalarlo el mismo con
+                                el boton de siempre del panel.
                             </p>
                         </div>
                     </div>

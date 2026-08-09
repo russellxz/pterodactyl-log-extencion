@@ -275,7 +275,6 @@
 
             var liveUrl = @json(route('admin.logspterodactyl.installs.live'));
             var stopUrlTemplate = @json(route('admin.logspterodactyl.installs.stop', ['server' => '__ID__']));
-            var recreateUrlTemplate = @json(route('admin.logspterodactyl.installs.recreate', ['server' => '__ID__']));
             var token = @json(csrf_token());
             var container = document.getElementById('logspterodactyl-live');
             var meta = document.getElementById('logspterodactyl-live-meta');
@@ -301,8 +300,33 @@
             }
 
             function render(data) {
+                if (data.error) {
+                    container.innerHTML = '<div class="logspterodactyl-alert logspterodactyl-alert-error" style="margin:14px;">'
+                        + '<span>No se pudo leer la lista: ' + escapeHtml(data.error) + '</span></div>';
+                    return;
+                }
+
                 if (!data.servers.length) {
-                    container.innerHTML = '<p class="logspterodactyl-empty">No hay ningun servidor instalando en este momento.</p>';
+                    var d = data.diagnostico || {};
+                    var estados = d.servidores_por_estado || {};
+                    var detalle = '';
+
+                    for (var k in estados) {
+                        if (Object.prototype.hasOwnProperty.call(estados, k)) {
+                            detalle += '<li><code>' + escapeHtml(k) + '</code>: ' + estados[k] + '</li>';
+                        }
+                    }
+
+                    container.innerHTML = '<p class="logspterodactyl-empty">No hay ningun servidor instalando en este momento.</p>'
+                        + '<div class="logspterodactyl-diag">'
+                        + '<strong>Estado real de la base de datos</strong> ('
+                        + (d.total_servidores || 0) + ' servidores en total)'
+                        + '<ul>' + (detalle || '<li>sin datos</li>') + '</ul>'
+                        + '<p>Si el panel te ensena un servidor "instalando" pero aqui no aparece '
+                        + 'ninguno en <code>installing</code>, la instalacion ya termino (bien o mal) '
+                        + 'y lo que ves es la pantalla del navegador sin refrescar. '
+                        + 'Recarga la pagina del servidor con Ctrl+F5.</p>'
+                        + '</div>';
                     return;
                 }
 
@@ -327,10 +351,10 @@
                         + '<td>'
                         + form(stopUrlTemplate, s.id, { mode: 'fail_rotate', notify: '1' },
                             'Parar y cambiar puerto', 'btn-warning',
-                            'Se marcara la instalacion como fallida y se movera el servidor a otro puerto libre del nodo. ¿Continuar?')
-                        + form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1' },
-                            'Parada forzada', 'btn-danger',
-                            'ADEMAS de lo anterior se borrara el servidor en el nodo para cortar el contenedor de instalacion colgado. Los archivos de esa instalacion incompleta se pierden y habra que recrear el servidor en el nodo antes de reinstalar. ¿Continuar?')
+                            'Se detendra la instalacion y el servidor pasara a otro puerto libre del nodo. No se borra nada: el cliente podra revisar sus datos de arranque y reinstalarlo el mismo. ¿Continuar?')
+                        + form(stopUrlTemplate, s.id, { mode: 'fail', notify: '1' },
+                            'Solo parar', 'btn-default',
+                            'Se detendra la instalacion sin tocar el puerto. ¿Continuar?')
                         + '</td></tr>';
                 }
 

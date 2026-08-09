@@ -8,6 +8,7 @@ use Pterodactyl\Extensions\LogsPterodactyl\Listeners\MailLogListener;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\ExtensionEvent;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\MailCampaign;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\MailLog;
+use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
 use Pterodactyl\Models\User;
 
 /**
@@ -110,6 +111,44 @@ class BulkMailer
      */
     public function render(string $bodyHtml, ?string $logoUrl, ?object $recipient = null): string
     {
+        $cuerpo = $this->replacePlaceholders($bodyHtml, $logoUrl, $recipient);
+        $settings = Settings::make();
+        $modo = (string) $settings->get('mail_template_mode');
+
+        // "raw": se envia el HTML del administrador tal cual, sin marco. Para
+        // quien trae su propia maquetacion hecha y no quiere nada por encima.
+        if ($modo === 'raw') {
+            return $cuerpo;
+        }
+
+        // "custom": el marco lo escribe el administrador y lleva {{contenido}}
+        // donde va el mensaje.
+        if ($modo === 'custom') {
+            $plantilla = (string) $settings->get('mail_template_html');
+
+            if (trim($plantilla) !== '' && str_contains($plantilla, '{{contenido}}')) {
+                return str_replace(
+                    '{{contenido}}',
+                    $cuerpo,
+                    $this->replacePlaceholders($plantilla, $logoUrl, $recipient)
+                );
+            }
+            // Si la plantilla esta vacia o le falta {{contenido}} se cae al
+            // marco de serie en vez de mandar un correo roto.
+        }
+
+        return view('logspterodactyl::mail.bulk', [
+            'cuerpo' => $cuerpo,
+            'logoUrl' => $logoUrl,
+            'appName' => config('app.name', 'Pterodactyl'),
+        ])->render();
+    }
+
+    /**
+     * Sustituye los marcadores en un texto.
+     */
+    private function replacePlaceholders(string $html, ?string $logoUrl, ?object $recipient): string
+    {
         $nombre = '';
 
         if ($recipient) {
@@ -117,17 +156,25 @@ class BulkMailer
                 ?: (string) ($recipient->username ?? '');
         }
 
-        // Marcadores sencillos para personalizar el mensaje.
-        $cuerpo = strtr($bodyHtml, [
+        return strtr($html, [
             '{{nombre}}' => e($nombre),
             '{{correo}}' => e((string) ($recipient->email ?? '')),
             '{{panel}}' => e((string) config('app.name', 'Pterodactyl')),
+            '{{logo}}' => $logoUrl ? e($logoUrl) : '',
+            '{{url}}' => e(rtrim((string) config('app.url'), '/')),
         ]);
+    }
 
+    /**
+     * El marco de serie, para poder ensenarlo como punto de partida cuando el
+     * administrador quiera escribir el suyo.
+     */
+    public function defaultTemplate(): string
+    {
         return view('logspterodactyl::mail.bulk', [
-            'cuerpo' => $cuerpo,
-            'logoUrl' => $logoUrl,
-            'appName' => config('app.name', 'Pterodactyl'),
+            'cuerpo' => '{{contenido}}',
+            'logoUrl' => '{{logo}}',
+            'appName' => (string) config('app.name', 'Pterodactyl'),
         ])->render();
     }
 

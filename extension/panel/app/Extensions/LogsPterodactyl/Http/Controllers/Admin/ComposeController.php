@@ -29,7 +29,54 @@ class ComposeController extends Controller
             'logoUrl' => $this->settings->get('mail_logo_url') ?: null,
             'campaigns' => MailCampaign::query()->orderByDesc('id')->limit(10)->get(),
             'logEnabled' => $this->settings->bool('mail_log_enabled'),
+            'templateMode' => (string) $this->settings->get('mail_template_mode'),
+            'templateHtml' => (string) $this->settings->get('mail_template_html'),
+            'defaultTemplate' => $this->mailer->defaultTemplate(),
         ]);
+    }
+
+    /**
+     * Guarda la plantilla con la que se envuelven los correos.
+     */
+    public function template(Request $request)
+    {
+        $data = $request->validate([
+            'mail_template_mode' => 'required|in:marco,custom,raw',
+            'mail_template_html' => 'nullable|string|max:200000',
+        ]);
+
+        if ($data['mail_template_mode'] === 'custom') {
+            $html = (string) ($data['mail_template_html'] ?? '');
+
+            if (trim($html) === '') {
+                return back()->with(
+                    'logspterodactyl_error',
+                    'Has elegido plantilla propia pero la has dejado vacia. Pulsa "Cargar la de serie" para partir de una.'
+                );
+            }
+
+            if (!str_contains($html, '{{contenido}}')) {
+                return back()->with(
+                    'logspterodactyl_error',
+                    'A tu plantilla le falta {{contenido}}: es donde se mete el mensaje que escribas al enviar. '
+                    . 'Sin eso el correo saldria vacio.'
+                );
+            }
+        }
+
+        $this->settings->set('mail_template_mode', $data['mail_template_mode']);
+        $this->settings->set('mail_template_html', (string) ($data['mail_template_html'] ?? ''));
+
+        $etiquetas = [
+            'marco' => 'el marco de serie',
+            'custom' => 'tu propia plantilla',
+            'raw' => 'tu HTML tal cual, sin marco',
+        ];
+
+        return back()->with(
+            'logspterodactyl_success',
+            'Guardado. Los correos se enviaran con ' . $etiquetas[$data['mail_template_mode']] . '.'
+        );
     }
 
     /**

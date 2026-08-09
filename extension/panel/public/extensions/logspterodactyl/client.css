@@ -26,6 +26,12 @@
 
 .logspterodactyl-card {
     position: relative;
+    /* Nunca mas alta que la pantalla. En un movil la tarjeta entera no cabe y
+       antes se salia por abajo: el mensaje y el boton quedaban cortados. */
+    max-height: calc(100vh - 40px);
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: rgb(var(--gray800, 31 36 48));
     color: rgb(var(--gray200, 226 232 240));
     border: 1px solid rgb(var(--gray600, 71 85 105));
@@ -249,14 +255,39 @@
 /* En movil la tarjeta ocupa el ancho completo, pegada abajo. */
 @media (max-width: 640px) {
     .logspterodactyl-overlay {
-        right: 12px;
-        left: 12px;
-        bottom: 12px;
+        right: 8px;
+        left: 8px;
+        bottom: 8px;
         width: auto;
     }
 
     .logspterodactyl-card {
-        padding: 16px 16px 14px;
+        padding: 14px 14px 12px;
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - 16px);
+        font-size: 13.5px;
+    }
+
+    .logspterodactyl-title { font-size: 14.5px; }
+    .logspterodactyl-lead { margin: 10px 0 8px; font-size: 13px; }
+    .logspterodactyl-checks { margin-bottom: 12px; padding: 10px 12px; font-size: 12.5px; }
+    .logspterodactyl-badge { width: 30px; height: 30px; }
+
+    /* El boton ocupa todo el ancho: en un movil es lo que se busca a ciegas. */
+    .logspterodactyl-actions .logspterodactyl-btn { flex: 1 1 100%; justify-content: center; }
+    .logspterodactyl-hint { width: 100%; }
+}
+
+/* Pantallas muy bajas (movil en horizontal): la lista de causas se pliega
+   para que el boton siga siendo visible sin desplazarse. */
+@media (max-height: 620px) {
+    .logspterodactyl-checks {
+        max-height: 108px;
+        overflow-y: auto;
+    }
+
+    .logspterodactyl-lead {
+        margin: 8px 0 6px;
     }
 }
 
@@ -302,4 +333,9 @@
 .logspterodactyl-result .logspterodactyl-hint {
     display: block;
     margin-top: 6px;
+}
+
+.logspterodactyl-badge-ok {
+    background: rgba(45, 160, 90, .16);
+    color: #6fd39b;
 }
