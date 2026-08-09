@@ -1,0 +1,708 @@
+/*!
+ * LogsPterodactyl - estilos del area de administracion
+ *
+ * Todo con prefijo .logspterodactyl- para no pisar nada del panel ni del tema. Los
+ * colores salen de las variables que define Arix en su layout de admin
+ * (--box, --text, --primary...) y caen a los valores del AdminLTE original
+ * cuando esas variables no existen, asi las pantallas se ven bien en ambos.
+ */
+
+/* El atributo hidden lo aplica el navegador con muy poca prioridad: cualquier
+   regla de clase con "display" lo anula sin querer. Esta linea lo respeta en
+   todos los elementos de la extension. */
+[class*="logspterodactyl-"][hidden] {
+    display: none !important;
+}
+
+:root {
+    --logspterodactyl-ok: #2f9e5f;
+    --logspterodactyl-warning: #d8912b;
+    --logspterodactyl-danger: #cf4436;
+    --logspterodactyl-info: #3072c4;
+}
+
+/* --- Pestanas de navegacion de la extension --- */
+
+.logspterodactyl-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    padding: 6px;
+    background: var(--box, #fff);
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-radius: var(--radiusBox, 4px);
+}
+
+.logspterodactyl-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border-radius: var(--radiusInput, 4px);
+    color: var(--text-secondary, #5b6573);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background .15s ease, color .15s ease;
+}
+
+.logspterodactyl-tab:hover,
+.logspterodactyl-tab:focus {
+    background: var(--active, rgba(0, 0, 0, .05));
+    color: var(--text, #2b3440);
+    text-decoration: none;
+}
+
+.logspterodactyl-tab.active {
+    background: var(--primary, #3072c4);
+    color: #fff;
+}
+
+.logspterodactyl-tab.active:hover {
+    color: #fff;
+}
+
+/* --- Tarjetas de cifras --- */
+
+.logspterodactyl-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.logspterodactyl-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--box, #fff);
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-left: 3px solid var(--input-border, #cfd6dd);
+    border-radius: var(--radiusBox, 4px);
+}
+
+.logspterodactyl-stat.ok { border-left-color: var(--logspterodactyl-ok); }
+.logspterodactyl-stat.warning { border-left-color: var(--logspterodactyl-warning); }
+.logspterodactyl-stat.danger { border-left-color: var(--logspterodactyl-danger); }
+
+.logspterodactyl-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    border-radius: 8px;
+    background: var(--active, rgba(0, 0, 0, .05));
+    color: var(--text-secondary, #5b6573);
+}
+
+.logspterodactyl-stat-value {
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.15;
+    color: var(--text, #2b3440);
+    word-break: break-word;
+}
+
+.logspterodactyl-stat-label {
+    font-size: 12px;
+    color: var(--text-secondary, #7a8593);
+    margin-top: 2px;
+}
+
+.logspterodactyl-stat-hint {
+    font-size: 11.5px;
+    color: var(--text-secondary, #97a1ad);
+    margin-top: 3px;
+}
+
+/* --- Avisos --- */
+
+.logspterodactyl-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    border-radius: var(--radiusBox, 4px);
+    font-size: 13.5px;
+    border: 1px solid transparent;
+}
+
+.logspterodactyl-alert-ok {
+    background: rgba(47, 158, 95, .1);
+    border-color: rgba(47, 158, 95, .35);
+    color: var(--logspterodactyl-ok);
+}
+
+.logspterodactyl-alert-error {
+    background: rgba(207, 68, 54, .1);
+    border-color: rgba(207, 68, 54, .35);
+    color: var(--logspterodactyl-danger);
+}
+
+.logspterodactyl-alert-warning {
+    background: rgba(216, 145, 43, .1);
+    border-color: rgba(216, 145, 43, .35);
+    color: var(--logspterodactyl-warning);
+}
+
+.logspterodactyl-alert a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.logspterodactyl-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 11px 13px;
+    border-radius: var(--radiusInput, 4px);
+    font-size: 13px;
+    border: 1px solid transparent;
+    margin-bottom: 12px;
+}
+
+.logspterodactyl-note-ok { background: rgba(47, 158, 95, .08); border-color: rgba(47, 158, 95, .3); }
+.logspterodactyl-note-warning { background: rgba(216, 145, 43, .08); border-color: rgba(216, 145, 43, .3); }
+.logspterodactyl-note-error { background: rgba(207, 68, 54, .08); border-color: rgba(207, 68, 54, .3); }
+.logspterodactyl-note-info { background: rgba(48, 114, 196, .08); border-color: rgba(48, 114, 196, .3); }
+
+.logspterodactyl-note .logspterodactyl-svg { margin-top: 2px; flex: 0 0 auto; }
+
+/* --- Filtros --- */
+
+.logspterodactyl-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.logspterodactyl-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 170px;
+}
+
+.logspterodactyl-field-grow { flex: 1 1 240px; }
+
+.logspterodactyl-field label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-secondary, #8892a0);
+    margin: 0;
+}
+
+.logspterodactyl-field-actions {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    min-width: auto;
+}
+
+.logspterodactyl-checkline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 400;
+    margin: 0;
+    cursor: pointer;
+    color: var(--text-secondary, #5b6573);
+}
+
+.logspterodactyl-switch {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 400;
+    font-size: 13.5px;
+    margin: 0 0 9px;
+    cursor: pointer;
+    color: var(--text, inherit);
+}
+
+.logspterodactyl-switch input { margin-top: 3px; }
+
+/* --- Tablas --- */
+
+.logspterodactyl-table > tbody > tr > td,
+.logspterodactyl-table > thead > tr > th {
+    vertical-align: middle;
+    font-size: 13px;
+}
+
+.logspterodactyl-table > thead > tr > th {
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-secondary, #8892a0);
+}
+
+.logspterodactyl-row-warning > td {
+    background: rgba(216, 145, 43, .09) !important;
+}
+
+.logspterodactyl-small { font-size: 11.5px; }
+.logspterodactyl-muted { color: var(--text-secondary, #8892a0); }
+.logspterodactyl-text-warning { color: var(--logspterodactyl-warning); }
+
+.logspterodactyl-empty {
+    padding: 26px 18px;
+    margin: 0;
+    text-align: center;
+    color: var(--text-secondary, #97a1ad);
+    font-size: 13.5px;
+}
+
+/* --- Etiquetas de estado --- */
+
+.logspterodactyl-state {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.logspterodactyl-state-ok { background: rgba(47, 158, 95, .13); border-color: rgba(47, 158, 95, .4); color: var(--logspterodactyl-ok); }
+.logspterodactyl-state-danger { background: rgba(207, 68, 54, .13); border-color: rgba(207, 68, 54, .4); color: var(--logspterodactyl-danger); }
+.logspterodactyl-state-warning { background: rgba(216, 145, 43, .13); border-color: rgba(216, 145, 43, .4); color: var(--logspterodactyl-warning); }
+.logspterodactyl-state-info { background: rgba(48, 114, 196, .13); border-color: rgba(48, 114, 196, .4); color: var(--logspterodactyl-info); }
+.logspterodactyl-state-muted { background: rgba(120, 130, 145, .13); border-color: rgba(120, 130, 145, .35); color: var(--text-secondary, #7a8593); }
+
+.logspterodactyl-chip {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    background: var(--active, rgba(0, 0, 0, .06));
+    color: var(--text-secondary, #6b7684);
+    font-size: 11px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* --- Barras de porcentaje --- */
+
+.logspterodactyl-bar {
+    height: 5px;
+    margin-top: 5px;
+    border-radius: 3px;
+    background: var(--active, rgba(0, 0, 0, .09));
+    overflow: hidden;
+}
+
+.logspterodactyl-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--primary, #3072c4);
+    transition: width .4s ease;
+}
+
+.logspterodactyl-bar-fill.danger { background: var(--logspterodactyl-danger); }
+
+/* --- Visor de logs --- */
+
+.logspterodactyl-levelbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.logspterodactyl-levelbar-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 78px;
+    padding: 9px 12px;
+    background: var(--box, #fff);
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-top: 2px solid var(--input-border, #cfd6dd);
+    border-radius: var(--radiusInput, 4px);
+}
+
+.logspterodactyl-levelbar-value { font-size: 17px; font-weight: 600; color: var(--text, #2b3440); }
+.logspterodactyl-levelbar-label { font-size: 11px; color: var(--text-secondary, #8892a0); }
+
+.logspterodactyl-level-emergency, .logspterodactyl-level-alert, .logspterodactyl-level-critical { border-top-color: #7b1fa2; }
+.logspterodactyl-level-error { border-top-color: var(--logspterodactyl-danger); }
+.logspterodactyl-level-warning { border-top-color: var(--logspterodactyl-warning); }
+.logspterodactyl-level-notice, .logspterodactyl-level-info { border-top-color: var(--logspterodactyl-info); }
+.logspterodactyl-level-debug { border-top-color: #8892a0; }
+
+.logspterodactyl-entries {
+    max-height: 640px;
+    overflow-y: auto;
+}
+
+.logspterodactyl-entry {
+    padding: 11px 15px;
+    border-bottom: 1px solid var(--input-border, #eceff2);
+    border-left: 3px solid transparent;
+}
+
+.logspterodactyl-entry.logspterodactyl-level-error { border-left-color: var(--logspterodactyl-danger); }
+.logspterodactyl-entry.logspterodactyl-level-critical,
+.logspterodactyl-entry.logspterodactyl-level-alert,
+.logspterodactyl-entry.logspterodactyl-level-emergency { border-left-color: #7b1fa2; }
+.logspterodactyl-entry.logspterodactyl-level-warning { border-left-color: var(--logspterodactyl-warning); }
+.logspterodactyl-entry.logspterodactyl-level-info,
+.logspterodactyl-entry.logspterodactyl-level-notice { border-left-color: var(--logspterodactyl-info); }
+.logspterodactyl-entry.logspterodactyl-level-debug { border-left-color: #b6bec8; }
+
+.logspterodactyl-entry-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.logspterodactyl-entry-head[data-toggle-stack] { cursor: pointer; }
+
+.logspterodactyl-tag {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--active, rgba(0, 0, 0, .06));
+    color: var(--text-secondary, #5b6573);
+}
+
+.logspterodactyl-level-error .logspterodactyl-tag { background: rgba(207, 68, 54, .14); color: var(--logspterodactyl-danger); }
+.logspterodactyl-level-critical .logspterodactyl-tag,
+.logspterodactyl-level-alert .logspterodactyl-tag,
+.logspterodactyl-level-emergency .logspterodactyl-tag { background: rgba(123, 31, 162, .14); color: #7b1fa2; }
+.logspterodactyl-level-warning .logspterodactyl-tag { background: rgba(216, 145, 43, .14); color: var(--logspterodactyl-warning); }
+
+.logspterodactyl-entry-date {
+    font-size: 11.5px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: var(--text-secondary, #8892a0);
+}
+
+.logspterodactyl-origin {
+    font-size: 11.5px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: var(--text-secondary, #7a8593);
+    margin-left: auto;
+    word-break: break-all;
+}
+
+.logspterodactyl-expand {
+    font-size: 11.5px;
+    color: var(--primary, #3072c4);
+    text-decoration: underline;
+}
+
+.logspterodactyl-entry-message {
+    font-size: 13px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: var(--text, #2b3440);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.logspterodactyl-stack {
+    margin: 9px 0 0;
+    padding: 11px 13px;
+    max-height: 380px;
+    overflow: auto;
+    font-size: 11.5px;
+    line-height: 1.5;
+    background: var(--active, rgba(0, 0, 0, .045));
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-radius: var(--radiusInput, 4px);
+    color: var(--text-secondary, #5b6573);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- Registro / feed --- */
+
+.logspterodactyl-feed { list-style: none; margin: 0; padding: 0; }
+
+.logspterodactyl-feed-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 15px;
+    border-bottom: 1px solid var(--input-border, #eceff2);
+    font-size: 13px;
+}
+
+.logspterodactyl-feed-dot {
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 50%;
+    background: var(--logspterodactyl-info);
+}
+
+.logspterodactyl-feed-item.logspterodactyl-level-warning .logspterodactyl-feed-dot { background: var(--logspterodactyl-warning); }
+.logspterodactyl-feed-item.logspterodactyl-level-error .logspterodactyl-feed-dot { background: var(--logspterodactyl-danger); }
+
+.logspterodactyl-feed-message { color: var(--text, #2b3440); }
+.logspterodactyl-feed-meta { font-size: 11.5px; color: var(--text-secondary, #8892a0); margin-top: 2px; }
+
+/* --- Actualizador --- */
+
+.logspterodactyl-versions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+.logspterodactyl-versions-label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--text-secondary, #8892a0);
+}
+
+.logspterodactyl-versions-value {
+    display: block;
+    font-size: 22px;
+    font-weight: 600;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    color: var(--text, #2b3440);
+}
+
+.logspterodactyl-versions-arrow { color: var(--text-secondary, #b0b8c2); }
+
+.logspterodactyl-steps-preview {
+    margin: 0 0 14px;
+    padding-left: 20px;
+    font-size: 13px;
+    color: var(--text-secondary, #5b6573);
+}
+
+.logspterodactyl-steps-preview li { margin-bottom: 4px; }
+
+.logspterodactyl-steps { list-style: none; margin: 0 0 12px; padding: 0; }
+
+.logspterodactyl-step {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 0;
+    font-size: 13px;
+    color: var(--text-secondary, #7a8593);
+}
+
+.logspterodactyl-step-dot {
+    flex: 0 0 auto;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #b6bec8;
+}
+
+.logspterodactyl-step-done { color: var(--text, #2b3440); }
+.logspterodactyl-step-done .logspterodactyl-step-dot { background: var(--logspterodactyl-ok); }
+.logspterodactyl-step-warning .logspterodactyl-step-dot { background: var(--logspterodactyl-warning); }
+.logspterodactyl-step-failed { color: var(--logspterodactyl-danger); }
+.logspterodactyl-step-failed .logspterodactyl-step-dot { background: var(--logspterodactyl-danger); }
+
+.logspterodactyl-step-running .logspterodactyl-step-dot {
+    background: var(--logspterodactyl-info);
+    animation: logspterodactyl-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes logspterodactyl-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: .35; transform: scale(.75); }
+}
+
+.logspterodactyl-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    color: #fff;
+    background: #b6bec8;
+}
+
+.logspterodactyl-check.ok { background: var(--logspterodactyl-ok); }
+.logspterodactyl-check.warning { background: var(--logspterodactyl-warning); }
+.logspterodactyl-check.danger { background: var(--logspterodactyl-danger); }
+
+/* --- Vista previa de correos --- */
+
+.logspterodactyl-mail-preview {
+    width: 100%;
+    min-height: 520px;
+    border: 0;
+    background: #fff;
+    display: block;
+}
+
+/* El atributo hidden lo pone el navegador con muy poca prioridad, asi que
+   cualquier regla de clase con display lo anula. Hay que decirlo a mano. */
+.logspterodactyl-mail-preview[hidden] {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logspterodactyl-bar-fill,
+    .logspterodactyl-step-running .logspterodactyl-step-dot,
+    .logspterodactyl-tab {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* --- Redactar correos --- */
+
+.logspterodactyl-editor {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    min-height: 260px;
+    resize: vertical;
+}
+
+.logspterodactyl-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+
+.logspterodactyl-picker {
+    max-height: 230px;
+    overflow-y: auto;
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-radius: var(--radiusInput, 4px);
+    margin-bottom: 12px;
+}
+
+.logspterodactyl-picker:empty {
+    display: none;
+}
+
+.logspterodactyl-picker-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--input-border, #eceff2);
+    text-align: left;
+    cursor: pointer;
+    color: var(--text, #2b3440);
+    font-size: 13px;
+}
+
+.logspterodactyl-picker-item:last-child { border-bottom: 0; }
+
+.logspterodactyl-picker-item:hover {
+    background: var(--active, rgba(0, 0, 0, .05));
+}
+
+.logspterodactyl-picker-item small {
+    color: var(--text-secondary, #8892a0);
+    font-size: 11.5px;
+}
+
+.logspterodactyl-picker-item.activo {
+    background: rgba(47, 158, 95, .12);
+    box-shadow: inset 3px 0 0 var(--logspterodactyl-ok);
+}
+
+.logspterodactyl-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 32px;
+    padding: 8px;
+    border: 1px dashed var(--input-border, #d7dde3);
+    border-radius: var(--radiusInput, 4px);
+}
+
+.logspterodactyl-chip-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px 3px 10px;
+    background: var(--active, rgba(0, 0, 0, .06));
+    border-radius: 20px;
+    font-size: 12.5px;
+    color: var(--text, #2b3440);
+}
+
+.logspterodactyl-chip-user small {
+    color: var(--text-secondary, #8892a0);
+    font-size: 11px;
+}
+
+.logspterodactyl-chip-user button {
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary, #8892a0);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.logspterodactyl-chip-user button:hover {
+    color: var(--logspterodactyl-danger);
+}
+
+.logspterodactyl-logo-preview {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: #ffffff;
+    border: 1px solid var(--input-border, #e0e4e8);
+    border-radius: var(--radiusInput, 4px);
+}
+
+.logspterodactyl-logo-preview img {
+    max-width: 190px;
+    max-height: 80px;
+    height: auto;
+}
+
+/* --- Seguimiento de instalaciones detenidas --- */
+
+.logspterodactyl-chain {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--text-secondary, #8892a0);
+}
+
+.logspterodactyl-attempt {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--active, rgba(0, 0, 0, .07));
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}

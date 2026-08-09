@@ -1,0 +1,305 @@
+/*!
+ * LogsPterodactyl - estilos del aviso de instalacion (area de cliente)
+ *
+ * Todo va con prefijo .logspterodactyl- y con variables propias para no heredar ni
+ * pisar nada del tema. Se apoya en las variables de color de Arix cuando
+ * existen (--primary, --gray800...) y cae a unos valores neutros cuando no,
+ * asi luce bien tanto en Arix como en el panel original.
+ */
+
+.logspterodactyl-overlay {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 2147483000;
+    width: min(420px, calc(100vw - 32px));
+    opacity: 0;
+    transform: translateY(12px);
+    transition: opacity .2s ease, transform .2s ease;
+    font-family: var(--fontFamily, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
+}
+
+.logspterodactyl-overlay.logspterodactyl-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.logspterodactyl-card {
+    position: relative;
+    background: rgb(var(--gray800, 31 36 48));
+    color: rgb(var(--gray200, 226 232 240));
+    border: 1px solid rgb(var(--gray600, 71 85 105));
+    border-left: 3px solid #e0a53a;
+    border-radius: var(--radiusBox, 10px);
+    padding: 18px 20px 16px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .38);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+/* Si el tema no define las variables, rgb() con un valor invalido no aplica;
+   este respaldo garantiza un fondo solido en cualquier panel. */
+@supports not (color: rgb(var(--gray800, 31 36 48))) {
+    .logspterodactyl-card {
+        background: #1f2430;
+        color: #e2e8f0;
+        border-color: #475569;
+    }
+}
+
+.logspterodactyl-icon {
+    flex: 0 0 auto;
+    vertical-align: -.15em;
+}
+
+.logspterodactyl-dismiss {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 0;
+    border-radius: 6px;
+    color: rgb(var(--gray400, 148 163 184));
+    cursor: pointer;
+    padding: 0;
+    transition: background .15s ease, color .15s ease;
+}
+
+.logspterodactyl-dismiss:hover {
+    background: rgba(255, 255, 255, .08);
+    color: inherit;
+}
+
+.logspterodactyl-head {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding-right: 26px;
+}
+
+.logspterodactyl-badge {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
+    background: rgba(224, 165, 58, .14);
+    color: #e0a53a;
+}
+
+.logspterodactyl-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.35;
+    color: inherit;
+}
+
+.logspterodactyl-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.logspterodactyl-lead {
+    margin: 14px 0 10px;
+    font-size: 13.5px;
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.logspterodactyl-checks {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid rgb(var(--gray600, 71 85 105));
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.logspterodactyl-checks li {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 4px 0;
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.logspterodactyl-checks li .logspterodactyl-icon {
+    margin-top: 2px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.logspterodactyl-checks strong {
+    color: inherit;
+    font-weight: 600;
+}
+
+.logspterodactyl-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.logspterodactyl-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px;
+    border: 1px solid transparent;
+    border-radius: var(--radiusInput, 7px);
+    font-size: 13.5px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: filter .15s ease, background .15s ease;
+}
+
+.logspterodactyl-btn:disabled {
+    cursor: default;
+    opacity: .75;
+}
+
+.logspterodactyl-btn-danger {
+    background: #c0392b;
+    color: #fff;
+}
+
+.logspterodactyl-btn-danger:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+
+.logspterodactyl-btn-ghost {
+    background: transparent;
+    border-color: rgb(var(--gray600, 71 85 105));
+    color: rgb(var(--gray300, 203 213 225));
+}
+
+.logspterodactyl-btn-ghost:hover {
+    background: rgba(255, 255, 255, .06);
+}
+
+.logspterodactyl-hint,
+.logspterodactyl-confirm-text {
+    font-size: 12.5px;
+    color: rgb(var(--gray400, 148 163 184));
+}
+
+.logspterodactyl-confirm-text {
+    font-weight: 600;
+    width: 100%;
+}
+
+.logspterodactyl-result {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    margin-top: 14px;
+    padding: 11px 13px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.logspterodactyl-result-ok {
+    background: rgba(45, 160, 90, .13);
+    border: 1px solid rgba(45, 160, 90, .4);
+    color: #6fd39b;
+}
+
+.logspterodactyl-result-error {
+    background: rgba(192, 57, 43, .13);
+    border: 1px solid rgba(192, 57, 43, .4);
+    color: #f0938a;
+}
+
+.logspterodactyl-result .logspterodactyl-icon {
+    margin-top: 2px;
+}
+
+.logspterodactyl-spin {
+    display: inline-flex;
+    animation: logspterodactyl-rotate 1s linear infinite;
+}
+
+@keyframes logspterodactyl-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .logspterodactyl-overlay,
+    .logspterodactyl-spin {
+        transition: none;
+        animation: none;
+    }
+}
+
+/* En movil la tarjeta ocupa el ancho completo, pegada abajo. */
+@media (max-width: 640px) {
+    .logspterodactyl-overlay {
+        right: 12px;
+        left: 12px;
+        bottom: 12px;
+        width: auto;
+    }
+
+    .logspterodactyl-card {
+        padding: 16px 16px 14px;
+    }
+}
+
+/* El panel puede estar en modo claro (Arix lo permite): en ese caso se usan
+   los tonos claros del propio tema. */
+.lightmode .logspterodactyl-card {
+    background: rgb(var(--gray800, 255 255 255));
+    color: rgb(var(--gray200, 31 41 55));
+    box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+}
+
+.lightmode .logspterodactyl-checks {
+    background: rgba(15, 23, 42, .035);
+}
+
+/* --- Variantes anadidas para la tarjeta de "instalacion fallida" --- */
+
+.logspterodactyl-badge-danger {
+    background: rgba(192, 57, 43, .16);
+    color: #e0685c;
+}
+
+.logspterodactyl-card:has(.logspterodactyl-badge-danger) {
+    border-left-color: #c0392b;
+}
+
+.logspterodactyl-btn-primary {
+    background: rgb(var(--primary, 47 111 237));
+    color: #fff;
+}
+
+.logspterodactyl-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.12);
+}
+
+/* Respaldo para navegadores sin :has() y para temas que no definan --primary */
+@supports not selector(:has(*)) {
+    .logspterodactyl-card {
+        border-left-color: #e0a53a;
+    }
+}
+
+.logspterodactyl-result .logspterodactyl-hint {
+    display: block;
+    margin-top: 6px;
+}

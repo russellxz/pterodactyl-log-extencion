@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  ArixLog - desinstalador
+#  LogsPterodactyl - desinstalador
 #
 #  Deja el panel exactamente como estaba: quita los archivos, la linea de
 #  config/app.php y las tablas de la extension. No toca nada del panel ni del
@@ -38,7 +38,7 @@ ok()   { printf '  %s[ok]%s   %s\n' "$G" "$N" "$1"; }
 warn() { printf '  %s[..]%s   %s\n' "$Y" "$N" "$1"; }
 err()  { printf '  %s[!!]%s   %s\n' "$R" "$N" "$1"; }
 
-printf '\n%s  ArixLog - desinstalador%s\n' "$B" "$N"
+printf '\n%s  LogsPterodactyl - desinstalador%s\n' "$B" "$N"
 printf '  ---------------------------------------------------------------\n'
 
 if [ ! -f "$PANEL/artisan" ]; then
@@ -50,14 +50,14 @@ fi
 ok "Panel encontrado en $PANEL"
 
 printf '\n  Se va a quitar:\n'
-printf '    - %s/app/Extensions/ArixLog\n' "$PANEL"
-printf '    - %s/public/extensions/arixlog\n' "$PANEL"
-printf '    - la linea de ArixLog en config/app.php\n'
+printf '    - %s/app/Extensions/LogsPterodactyl\n' "$PANEL"
+printf '    - %s/public/extensions/logspterodactyl\n' "$PANEL"
+printf '    - la linea de LogsPterodactyl en config/app.php\n'
 
 if [ "$KEEP_DATA" -eq 1 ]; then
     printf '    - las tablas se CONSERVAN (--keep-data)\n'
 else
-    printf '    - las tablas arixlog_* y todo su contenido\n'
+    printf '    - las tablas logspterodactyl_* y todo su contenido\n'
 fi
 
 printf '\n  No se toca nada del panel, del tema Arix ni de tus servidores.\n\n'
@@ -78,36 +78,36 @@ cd "$PANEL" || exit 1
 if [ "$KEEP_DATA" -eq 1 ]; then
     warn "Tablas conservadas por peticion (--keep-data)"
 else
-    if php artisan arixlog:uninstall --force >/dev/null 2>&1; then
+    if php artisan logspterodactyl:uninstall --force >/dev/null 2>&1; then
         ok "Tablas de la extension borradas"
     else
         warn "No se pudieron borrar las tablas con artisan"
         printf '        Puedes borrarlas a mano cuando quieras:\n'
-        printf '        DROP TABLE arixlog_update_runs, arixlog_resource_samples,\n'
-        printf '          arixlog_mail_logs, arixlog_install_events,\n'
-        printf '          arixlog_events, arixlog_settings;\n'
+        printf '        DROP TABLE logspterodactyl_update_runs, logspterodactyl_resource_samples,\n'
+        printf '          logspterodactyl_mail_logs, logspterodactyl_install_events,\n'
+        printf '          logspterodactyl_events, logspterodactyl_settings;\n'
     fi
 fi
 
 # --- 2. Quitar el registro del proveedor ------------------------------------
 
-if [ -f "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" ]; then
-    if php "$PANEL/app/Extensions/ArixLog/tools/register-provider.php" "$PANEL" --remove >/dev/null 2>&1; then
-        ok "Linea de ArixLog quitada de config/app.php"
+if [ -f "$PANEL/app/Extensions/LogsPterodactyl/tools/register-provider.php" ]; then
+    if php "$PANEL/app/Extensions/LogsPterodactyl/tools/register-provider.php" "$PANEL" --remove >/dev/null 2>&1; then
+        ok "Linea de LogsPterodactyl quitada de config/app.php"
     else
         err "No se pudo editar config/app.php"
-        printf '        Quita a mano la linea que contiene ArixLogServiceProvider.\n'
+        printf '        Quita a mano la linea que contiene LogsPterodactylServiceProvider.\n'
     fi
 else
     # Respaldo por si los archivos ya no estan: se limpia con sed.
-    if grep -q 'ArixLogServiceProvider' "$PANEL/config/app.php" 2>/dev/null; then
-        cp "$PANEL/config/app.php" "$PANEL/config/app.php.arixlog-antes-de-desinstalar"
-        sed -i '/ArixLog START/,/ArixLog END/d; /ArixLogServiceProvider/d' "$PANEL/config/app.php"
+    if grep -q 'LogsPterodactylServiceProvider' "$PANEL/config/app.php" 2>/dev/null; then
+        cp "$PANEL/config/app.php" "$PANEL/config/app.php.logspterodactyl-antes-de-desinstalar"
+        sed -i '/LogsPterodactyl START/,/LogsPterodactyl END/d; /LogsPterodactylServiceProvider/d' "$PANEL/config/app.php"
 
         if php -l "$PANEL/config/app.php" >/dev/null 2>&1; then
-            ok "Linea de ArixLog quitada de config/app.php"
+            ok "Linea de LogsPterodactyl quitada de config/app.php"
         else
-            mv "$PANEL/config/app.php.arixlog-antes-de-desinstalar" "$PANEL/config/app.php"
+            mv "$PANEL/config/app.php.logspterodactyl-antes-de-desinstalar" "$PANEL/config/app.php"
             err "El archivo quedaba invalido, se ha restaurado. Quita la linea a mano."
         fi
     else
@@ -117,8 +117,8 @@ fi
 
 # --- 3. Borrar los archivos -------------------------------------------------
 
-rm -rf "$PANEL/app/Extensions/ArixLog" && ok "Codigo borrado" || err "No se pudo borrar app/Extensions/ArixLog"
-rm -rf "$PANEL/public/extensions/arixlog" && ok "Recursos publicos borrados" || err "No se pudo borrar public/extensions/arixlog"
+rm -rf "$PANEL/app/Extensions/LogsPterodactyl" && ok "Codigo borrado" || err "No se pudo borrar app/Extensions/LogsPterodactyl"
+rm -rf "$PANEL/public/extensions/logspterodactyl" && ok "Recursos publicos borrados" || err "No se pudo borrar public/extensions/logspterodactyl"
 
 # Si la carpeta app/Extensions se queda vacia se quita tambien, para no dejar
 # rastro; si hay otras extensiones se respeta.
@@ -126,7 +126,7 @@ rmdir "$PANEL/app/Extensions" 2>/dev/null && ok "Carpeta app/Extensions vacia, b
 rmdir "$PANEL/public/extensions" 2>/dev/null || true
 
 # La copia de seguridad de config/app.php que hizo el instalador ya no sirve.
-rm -f "$PANEL/config/app.php.arixlog-backup" "$PANEL/config/app.php.arixlog-antes-de-desinstalar"
+rm -f "$PANEL/config/app.php.logspterodactyl-backup" "$PANEL/config/app.php.logspterodactyl-antes-de-desinstalar"
 
 # --- 4. Limpiar caches ------------------------------------------------------
 
@@ -143,13 +143,13 @@ fi
 
 # --- Resumen ----------------------------------------------------------------
 
-printf '\n%s  ArixLog desinstalado%s\n' "$G$B" "$N"
+printf '\n%s  LogsPterodactyl desinstalado%s\n' "$G$B" "$N"
 printf '  ---------------------------------------------------------------\n'
 printf '  El panel ha quedado como estaba.\n'
 
 if [ "$KEEP_DATA" -eq 1 ]; then
-    printf '  Las tablas arixlog_* siguen ahi por si reinstalas.\n'
+    printf '  Las tablas logspterodactyl_* siguen ahi por si reinstalas.\n'
 fi
 
-printf '\n  Los respaldos del panel en /var/backups/arixlog NO se han tocado.\n'
+printf '\n  Los respaldos del panel en /var/backups/logspterodactyl NO se han tocado.\n'
 printf '  Si ya no los necesitas, borralos a mano.\n\n'

@@ -10,4 +10,4 @@ Thumbs.db
 
 # Registros y respaldos que pudieran quedar sueltos al probar
 *.log
-/extension/panel/public/extensions/arixlog/runs/
+/extension/panel/public/extensions/logspterodactyl/runs/
