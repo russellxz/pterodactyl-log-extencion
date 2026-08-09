@@ -348,6 +348,92 @@
     word-break: break-word;
 }
 
+/* --- Diagnostico de un dominio ------------------------------------------ */
+
+.dnsreverse-diag-resumen {
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.dnsreverse-diag {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dnsreverse-diag li {
+    position: relative;
+    padding: 8px 0 8px 26px;
+    border-bottom: 1px solid var(--dnsreverse-borde);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.dnsreverse-diag li:last-child {
+    border-bottom: 0;
+}
+
+.dnsreverse-diag li::before {
+    position: absolute;
+    left: 4px;
+    top: 8px;
+    font-weight: 700;
+}
+
+.dnsreverse-diag-ok::before { content: "OK"; color: var(--dnsreverse-ok); font-size: 10px; }
+.dnsreverse-diag-aviso::before { content: "!"; color: var(--dnsreverse-aviso); }
+.dnsreverse-diag-error::before { content: "X"; color: var(--dnsreverse-error); }
+
+/* --- Resultado de probar un certificado --------------------------------- */
+
+.dnsreverse-cert-result {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--dnsreverse-borde);
+    border-radius: 8px;
+    background: var(--dnsreverse-fondo);
+    font-size: 13px;
+}
+
+.dnsreverse-cert-result p {
+    margin: 0 0 6px;
+}
+
+.dnsreverse-cert-ok { color: var(--dnsreverse-ok); }
+.dnsreverse-cert-error { color: var(--dnsreverse-error); }
+.dnsreverse-cert-aviso { color: var(--dnsreverse-aviso); }
+
+.dnsreverse-cert-lista {
+    margin: 0 0 8px;
+    padding-left: 18px;
+}
+
+.dnsreverse-cert-lista li {
+    margin-bottom: 4px;
+    line-height: 1.5;
+}
+
+.dnsreverse-cert-datos {
+    width: 100%;
+    margin-top: 8px;
+    font-size: 12.5px;
+}
+
+.dnsreverse-cert-datos td {
+    padding: 3px 0;
+    vertical-align: top;
+}
+
+.dnsreverse-cert-datos td:first-child {
+    width: 170px;
+    color: var(--dnsreverse-suave);
+}
+
+.dnsreverse-cert-datos code {
+    display: inline-block;
+    margin: 1px 2px 1px 0;
+}
+
 .dnsreverse-test-result {
     display: inline-block;
     margin-left: 10px;

@@ -107,16 +107,27 @@ class DnsDomain extends Model
     /**
      * ¿El registro de Cloudflare va con nube naranja?
      *
-     * Con certificado de origen SI (el certificado solo lo acepta Cloudflare).
-     * Con Let's Encrypt NO: la validacion del certificado tiene que llegar al
-     * nodo, y con la nube naranja de por medio suele fallar o dar error 526.
+     * Con certificado de origen SI: ese certificado solo lo acepta Cloudflare,
+     * asi que el trafico tiene que pasar por ahi a la fuerza.
+     *
+     * Con Let's Encrypt NUNCA, y esto no es negociable ni siquiera si el
+     * dominio esta puesto en "siempre naranja": para emitir el certificado,
+     * Let's Encrypt tiene que llegar por el puerto 80 hasta el nodo. Con la
+     * nube naranja de por medio la comprobacion se queda en Cloudflare y la
+     * emision falla, asi que el cliente se queda sin dominio y sin saber por
+     * que. Una vez emitido, si se quiere, se puede poner la nube en naranja a
+     * mano desde Cloudflare.
      */
     public function shouldProxy(string $sslMode): bool
     {
+        if ($sslMode === ProxyRecord::SSL_LETSENCRYPT) {
+            return false;
+        }
+
         return match ($this->proxied_mode) {
             'always' => true,
             'never' => false,
-            default => $sslMode === 'origin',
+            default => $sslMode === ProxyRecord::SSL_ORIGIN,
         };
     }
 

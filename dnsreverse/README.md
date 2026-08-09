@@ -394,9 +394,33 @@ Esta es la parte que mas confusion crea, asi que va explicada del tiron.
 
 ### Certificado de origen (Cloudflare)
 
-Lo genera Cloudflare en *SSL/TLS -> Origin Server*. **Dura 15 anos** y solo lo
-acepta Cloudflare, asi que **el trafico tiene que pasar por Cloudflare**: el
-registro va con la **nube naranja**.
+**Dura 15 anos** y solo lo acepta Cloudflare, asi que **el trafico tiene que
+pasar por Cloudflare**: el registro va con la **nube naranja**.
+
+Como sacarlo, paso a paso:
+
+1. Entra en Cloudflare y elige tu dominio.
+2. Menu **SSL/TLS -> Origin Server**. Enlace directo (cambia el dominio):
+   `https://dash.cloudflare.com/?to=/:account/TUDOMINIO.COM/ssl-tls/origin`
+3. Boton **Create Certificate**.
+4. Deja *Generate private key and CSR with Cloudflare* y *RSA (2048)*.
+5. En **Hostnames** tienen que estar **los dos**: `tudominio.com` y
+   `*.tudominio.com`. **Sin el comodin, los subdominios de tus clientes daran
+   error de certificado.**
+6. Duracion: **15 anos**.
+7. Copia **Origin Certificate** y **Private Key** en la ficha del dominio del
+   panel. La clave **solo se muestra una vez**: si cierras esa pantalla sin
+   copiarla, hay que generar otro certificado.
+
+Ademas, en Cloudflare **SSL/TLS -> Overview** el modo tiene que estar en
+**Full (strict)**. Con "Flexible" el navegador puede dar errores raros.
+
+> En la ficha del dominio tienes el enlace ya preparado y un boton
+> **Probar certificado** que comprueba que la clave sea la de ese certificado,
+> que no este caducado y que valga para tu dominio y sus subdominios. Si algo
+> falla te dice exactamente que. El panel **no deja guardar** un certificado que
+> no pase esas comprobaciones, para que el fallo no aparezca meses despues en la
+> pagina de un cliente.
 
 - Ventaja: no caduca en la practica y no hay que validar nada.
 - Requisito: nube naranja obligatoria.
@@ -598,6 +622,22 @@ Por orden de probabilidad:
 El certificado del origen no le vale a Cloudflare. Casi siempre es la mezcla:
 Let's Encrypt con la nube naranja. O pones la nube gris, o cambias a certificado
 de origen.
+
+### "Mi pagina no carga" (lo primero que hay que mirar)
+
+En *Admin -> DNS Reverse -> DNS de clientes*, cada fila tiene un boton con una
+**lupa**. Lo pulsas y te dice, paso a paso, donde esta el problema:
+
+- **El nombre no existe en DNS** -> el navegador da
+  `DNS_PROBE_FINISHED_NXDOMAIN`. El registro no se llego a crear en Cloudflare o
+  se borro. Con un subdominio nuestro, borra el DNS y vuelve a crearlo; si es el
+  dominio propio del cliente, el registro lo tiene que crear el.
+- **Apunta a otro sitio** -> el cliente tiene mal su registro A.
+- **No responde** -> el servidor esta apagado o al nodo le falta la
+  configuracion de nginx (boton *Resincronizar*).
+- **Error 525 o 526 de Cloudflare** -> problema de certificado. Casi siempre es
+  mezclar Let's Encrypt con la nube naranja, o un certificado de origen que no
+  vale para ese dominio. Comprueba el certificado en la ficha del dominio.
 
 ### Un dominio no carga y el resto si
 

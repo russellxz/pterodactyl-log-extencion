@@ -56,6 +56,14 @@ class InjectAssets
         }
 
         $isAdmin = $request->is('admin') || $request->is('admin/*');
+
+        // El css y el js del cliente solo se cargan DENTRO de un servidor, que
+        // es el unico sitio donde se usan. En el resto del panel (portada,
+        // cuenta, listado de servidores) no se toca absolutamente nada.
+        if (!$isAdmin && !$request->is('server/*')) {
+            return $response;
+        }
+
         $tags = $isAdmin ? $this->adminTags() : $this->clientTags($request);
 
         if ($tags === '') {

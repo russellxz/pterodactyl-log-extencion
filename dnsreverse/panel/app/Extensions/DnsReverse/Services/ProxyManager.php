@@ -168,7 +168,7 @@ class ProxyManager
 
         $this->comprobarDominioLibre($dominio);
 
-        [$modoSsl, $cert, $clave] = $this->resolverCertificado($entrada, $dominioBase, $tipo);
+        [$modoSsl, $cert, $clave] = $this->resolverCertificado($entrada, $dominioBase, $tipo, $dominio);
 
         // --- A partir de aqui ya se toca el mundo exterior -----------------
 
@@ -454,7 +454,7 @@ class ProxyManager
      *
      * @return array{0: string, 1: string, 2: string} modo, certificado, clave
      */
-    private function resolverCertificado(array $entrada, ?DnsDomain $dominioBase, string $tipo): array
+    private function resolverCertificado(array $entrada, ?DnsDomain $dominioBase, string $tipo, string $dominioCompleto = ''): array
     {
         $modo = (string) ($entrada['ssl_mode'] ?? ProxyRecord::SSL_NONE);
 
@@ -500,12 +500,14 @@ class ProxyManager
             );
         }
 
-        if (!str_contains($cert, 'BEGIN CERTIFICATE')) {
-            throw new \RuntimeException('El certificado no tiene la pinta correcta: debe empezar por -----BEGIN CERTIFICATE-----.');
-        }
+        // Se revisa de verdad, no solo que "tenga pinta": que la clave sea la
+        // de ese certificado, que no este caducado y que sirva para el dominio
+        // que se esta creando. Si no, el fallo aparece cuando el cliente entra
+        // a su pagina y nadie sabe de donde viene.
+        $revision = CertificateInspector::revisar($cert, $clave, $dominioCompleto);
 
-        if (!preg_match('/BEGIN (RSA |EC )?PRIVATE KEY/', $clave)) {
-            throw new \RuntimeException('La clave privada no tiene la pinta correcta: debe empezar por -----BEGIN PRIVATE KEY-----.');
+        if (!$revision['ok']) {
+            throw new \RuntimeException(implode(' ', $revision['errores']));
         }
 
         return [ProxyRecord::SSL_ORIGIN, $cert, $clave];
