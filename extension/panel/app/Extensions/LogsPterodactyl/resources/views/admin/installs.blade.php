@@ -52,10 +52,21 @@
 @foreach($atasco['comandos'] as $comando)
 <pre style="margin:0 0 6px;">{{ $comando }}</pre>
 @endforeach
-                                <div class="logspterodactyl-small logspterodactyl-muted">
+                                <div class="logspterodactyl-small logspterodactyl-muted" style="margin-bottom:8px;">
                                     No borra nada del servidor: solo mata el contenedor de instalacion
                                     que se quedo colgado. Despues, el cliente ya puede reinstalar normal.
                                 </div>
+                                <form method="POST" style="display:inline;"
+                                      action="{{ route('admin.logspterodactyl.nodes.release', $atasco['server_id']) }}"
+                                      onsubmit="return confirm('La extension entrara por SSH en el nodo y eliminara el contenedor de instalacion colgado de este servidor. No se borra nada mas. ¿Continuar?');">
+                                    {{ csrf_field() }}
+                                    <button type="submit" class="btn btn-xs btn-warning">
+                                        Hacerlo por mi (SSH)
+                                    </button>
+                                </form>
+                                <span class="logspterodactyl-muted logspterodactyl-small" style="margin-left:6px;">
+                                    Necesita el acceso del nodo guardado en la pestana <strong>Nodos</strong>.
+                                </span>
                             </div>
                         @endforeach
                     </div>

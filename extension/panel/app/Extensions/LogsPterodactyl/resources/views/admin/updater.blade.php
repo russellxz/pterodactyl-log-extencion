@@ -154,6 +154,22 @@
                                    value="{{ $latest['version'] }}" placeholder="por ejemplo 1.15.0">
                         </div>
 
+                        <div class="logspterodactyl-note logspterodactyl-note-warning" style="display:block;">
+                            @logsicon('database', 16)
+                            <span>
+                                <strong>Antes de darle, guardate las otras extensiones.</strong>
+                                Actualizar trae un <code>config/app.php</code> nuevo y se lleva por
+                                delante las lineas de proveedor de los demas addons: sus archivos
+                                siguen ahi, pero el panel deja de cargarlos.
+                                <br><br>
+                                Entra en <a href="{{ route('admin.logspterodactyl.extensions') }}"><strong>Otras
+                                extensiones</strong></a>, haz la copia y <strong>descargatela</strong>.
+                                Asi la tienes en tu equipo aunque algo se tuerza en el servidor.
+                                Cuando lances la actualizacion se hace otra copia sola, pero esa se
+                                queda en el servidor.
+                            </span>
+                        </div>
+
                         <label class="logspterodactyl-switch">
                             <input type="checkbox" name="restore_theme" value="1" checked>
                             <span>Restaurar el tema Arix despues de actualizar</span>

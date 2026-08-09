@@ -29,7 +29,7 @@ use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
  */
 class LogsPterodactylServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.2.0';
+    public const VERSION = '1.3.0';
 
     /**
      * Rutas del panel que jamas deben pasar por la inyeccion de HTML.

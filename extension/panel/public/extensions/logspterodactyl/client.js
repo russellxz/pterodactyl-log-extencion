@@ -164,12 +164,11 @@
             '      </p>' +
             '    </div>' +
             '  </div>' +
-            (data.nodeIssue
-                ? NODE_NOTE
-                : '  <p class="logspterodactyl-lead">' +
-                  '    Antes de detenerla, revisa los datos que pusiste al crear el servidor.' +
-                  '    Casi siempre la instalacion se queda atascada por uno de estos motivos:' +
-                  '  </p>' + CHECKLIST) +
+            (data.nodeIssue ? NODE_NOTE : '') +
+            '  <p class="logspterodactyl-lead">' +
+            '    Antes de detenerla, revisa los datos que pusiste al crear el servidor.' +
+            '    Casi siempre la instalacion se queda atascada por uno de estos motivos:' +
+            '  </p>' + CHECKLIST +
             '  <div class="logspterodactyl-actions">' +
             '    <button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger">' +
             icon('stop', 16) + '<span>Parar la instalacion</span></button>' +
@@ -190,48 +189,22 @@
         return wrapper;
     }
 
-    // Cuando el problema esta en el nodo no se le pide al cliente que revise
-    // nada: sus datos pueden estar perfectos y lo unico que se conseguiria es
-    // que rompiera una configuracion que ya iba bien.
+    // Aviso extra cuando el nodo tiene parte de culpa. Va ADEMAS de la lista de
+    // comprobacion, no en su lugar: que el nodo estuviera ocupado no quita que
+    // el token pueda estar mal puesto tambien, y si le escondemos la lista el
+    // cliente no revisa nada y vuelve a fallar igual.
     var NODE_NOTE =
-        '<p class="logspterodactyl-lead">' +
-        '<strong>Esta vez no es cosa tuya.</strong> El servidor no ha podido empezar a ' +
-        'instalarse por un problema en la maquina donde esta alojado, no por los datos ' +
-        'que pusiste. Nuestro equipo ya lo tiene localizado.' +
-        '</p>' +
-        '<p class="logspterodactyl-hint">No hace falta que cambies nada. Si en un rato ' +
-        'sigue igual, escribe al soporte y te lo miramos.</p>';
+        '<p class="logspterodactyl-lead logspterodactyl-node-note">' +
+        '<strong>Puede que esta vez no sea cosa tuya.</strong> Hemos detectado un problema ' +
+        'en la maquina donde esta alojado tu servidor y ya lo estamos mirando. ' +
+        'Aun asi, aprovecha para repasar tus datos: si tambien hay algo mal ahi, ' +
+        'volveria a fallar cuando lo arreglemos.' +
+        '</p>';
 
     // Tarjeta 2: la instalacion se detuvo. El servidor ya esta desbloqueado
     // (marcado como instalado) y con su puerto nuevo, asi que aqui solo se
     // explica que hacer: revisar los datos y volver a instalar.
     function buildStopped(data) {
-        if (data.nodeIssue) {
-            var aviso = shell(
-                '  <div class="logspterodactyl-head">' +
-                '    <span class="logspterodactyl-badge">' + icon('alert', 18) + '</span>' +
-                '    <div>' +
-                '      <h3 class="logspterodactyl-title">Instalacion detenida</h3>' +
-                '      <p class="logspterodactyl-subtitle">' + icon('unlock', 14) +
-                '        <span>Tu servidor ya esta desbloqueado y puedes entrar.</span>' +
-                '      </p>' +
-                '    </div>' +
-                '  </div>' +
-                (data.address
-                    ? '  <p class="logspterodactyl-lead">Tu servidor esta ahora en <strong>' +
-                      escapeHtml(data.address) + '</strong>.</p>'
-                    : '') +
-                NODE_NOTE
-            );
-
-            aviso.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
-                dismiss(data.serverId, data.stoppedId);
-                remove();
-            });
-
-            return aviso;
-        }
-
         var wrapper = shell(
             '  <div class="logspterodactyl-head">' +
             '    <span class="logspterodactyl-badge logspterodactyl-badge-ok">' + icon('check', 18) + '</span>' +
@@ -246,6 +219,7 @@
                 ? '  <p class="logspterodactyl-lead">Tu servidor esta ahora en <strong>' +
                   escapeHtml(data.address) + '</strong>.</p>'
                 : '') +
+            (data.nodeIssue ? NODE_NOTE : '') +
             '  <p class="logspterodactyl-lead">Repasa esto antes de volver a instalar:</p>' + CHECKLIST +
             '  <p class="logspterodactyl-hint">Cuando lo tengas corregido, entra en ' +
             '<strong>Ajustes</strong> y pulsa <strong>Reinstalar servidor</strong>.</p>'

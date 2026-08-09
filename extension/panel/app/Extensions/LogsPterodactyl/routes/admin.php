@@ -52,6 +52,15 @@ Route::get('/resources/live', [Admin\ResourcesController::class, 'live'])->name(
 Route::get('/resources/top', [Admin\ResourcesController::class, 'top'])->name('resources.top');
 
 // --- Actualizacion del panel ---
+// Acceso SSH a los nodos, para soltar el bloqueo de instalacion de wings.
+Route::get('/nodes', [Admin\NodesController::class, 'index'])->name('nodes');
+Route::post('/nodes/{node}', [Admin\NodesController::class, 'save'])->name('nodes.save');
+Route::post('/nodes/{node}/test', [Admin\NodesController::class, 'test'])->name('nodes.test');
+Route::post('/nodes/{node}/forget', [Admin\NodesController::class, 'forget'])->name('nodes.forget');
+Route::post('/nodes/{node}/delete', [Admin\NodesController::class, 'destroy'])->name('nodes.delete');
+Route::post('/nodes/{node}/restart-wings', [Admin\NodesController::class, 'restartWings'])->name('nodes.restart');
+Route::post('/nodes/release/{server}', [Admin\NodesController::class, 'releaseServer'])->name('nodes.release');
+
 // Las otras extensiones del panel: copias, descarga y restauracion.
 Route::get('/extensions', [Admin\ExtensionsController::class, 'index'])->name('extensions');
 Route::post('/extensions/backup', [Admin\ExtensionsController::class, 'backup'])->name('extensions.backup');

@@ -1,10 +1,13 @@
 /*!
  * LogsPterodactyl - estilos del aviso de instalacion (area de cliente)
  *
- * Todo va con prefijo .logspterodactyl- y con variables propias para no heredar ni
- * pisar nada del tema. Se apoya en las variables de color de Arix cuando
- * existen (--primary, --gray800...) y cae a unos valores neutros cuando no,
- * asi luce bien tanto en Arix como en el panel original.
+ * Todo va con prefijo .logspterodactyl- para no pisar nada del tema.
+ *
+ * Los colores de la tarjeta son SUYOS y solidos, no se heredan del tema. Antes
+ * se tomaban de las variables de Arix (--gray300, --gray400...) y segun el tema
+ * salian tan apagados que el texto gris no se leia, sobre todo encima de la
+ * pantalla de "Running Installer". Un aviso que no se lee no sirve de nada, asi
+ * que aqui se fija todo: fondo opaco y contraste alto pase lo que pase.
  */
 
 .logspterodactyl-overlay {
@@ -32,9 +35,18 @@
     max-height: calc(100dvh - 40px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: rgb(var(--gray800, 31 36 48));
-    color: rgb(var(--gray200, 226 232 240));
-    border: 1px solid rgb(var(--gray600, 71 85 105));
+    /* Paleta propia de la tarjeta. Nada de esto lo puede cambiar el tema. */
+    --lp-bg: #161a24;
+    --lp-fg: #f3f6fb;
+    --lp-fg-2: #d5dceb;
+    --lp-fg-3: #b3bdd0;
+    --lp-border: #3d4759;
+    --lp-panel: rgba(255, 255, 255, .05);
+
+    background: #161a24;
+    background: var(--lp-bg);
+    color: var(--lp-fg);
+    border: 1px solid var(--lp-border);
     border-left: 3px solid #e0a53a;
     border-radius: var(--radiusBox, 10px);
     padding: 18px 20px 16px;
@@ -43,14 +55,13 @@
     line-height: 1.55;
 }
 
-/* Si el tema no define las variables, rgb() con un valor invalido no aplica;
-   este respaldo garantiza un fondo solido en cualquier panel. */
-@supports not (color: rgb(var(--gray800, 31 36 48))) {
-    .logspterodactyl-card {
-        background: #1f2430;
-        color: #e2e8f0;
-        border-color: #475569;
-    }
+/* La tarjeta se dibuja encima de la pantalla del panel, asi que nada de
+   translucidez: detras hay texto y se mezclaba todo. */
+.logspterodactyl-card,
+.logspterodactyl-checks,
+.logspterodactyl-result {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }
 
 .logspterodactyl-icon {
@@ -70,7 +81,7 @@
     background: transparent;
     border: 0;
     border-radius: 6px;
-    color: rgb(var(--gray400, 148 163 184));
+    color: var(--lp-fg-3);
     cursor: pointer;
     padding: 0;
     transition: background .15s ease, color .15s ease;
@@ -114,21 +125,21 @@
     gap: 6px;
     margin: 4px 0 0;
     font-size: 12.5px;
-    color: rgb(var(--gray400, 148 163 184));
+    color: var(--lp-fg-3);
 }
 
 .logspterodactyl-lead {
     margin: 14px 0 10px;
     font-size: 13.5px;
-    color: rgb(var(--gray300, 203 213 225));
+    color: var(--lp-fg-2);
 }
 
 .logspterodactyl-checks {
     list-style: none;
     margin: 0 0 16px;
     padding: 12px 14px;
-    background: rgba(255, 255, 255, .04);
-    border: 1px solid rgb(var(--gray600, 71 85 105));
+    background: var(--lp-panel);
+    border: 1px solid var(--lp-border);
     border-radius: 8px;
     font-size: 13px;
 }
@@ -138,12 +149,12 @@
     align-items: flex-start;
     gap: 9px;
     padding: 4px 0;
-    color: rgb(var(--gray300, 203 213 225));
+    color: var(--lp-fg-2);
 }
 
 .logspterodactyl-checks li .logspterodactyl-icon {
     margin-top: 2px;
-    color: rgb(var(--gray400, 148 163 184));
+    color: var(--lp-fg-3);
 }
 
 .logspterodactyl-checks strong {
@@ -189,7 +200,7 @@
 .logspterodactyl-btn-ghost {
     background: transparent;
     border-color: rgb(var(--gray600, 71 85 105));
-    color: rgb(var(--gray300, 203 213 225));
+    color: var(--lp-fg-2);
 }
 
 .logspterodactyl-btn-ghost:hover {
@@ -199,7 +210,7 @@
 .logspterodactyl-hint,
 .logspterodactyl-confirm-text {
     font-size: 12.5px;
-    color: rgb(var(--gray400, 148 163 184));
+    color: var(--lp-fg-3);
 }
 
 .logspterodactyl-confirm-text {
@@ -291,16 +302,21 @@
     }
 }
 
-/* El panel puede estar en modo claro (Arix lo permite): en ese caso se usan
-   los tonos claros del propio tema. */
-.lightmode .logspterodactyl-card {
-    background: rgb(var(--gray800, 255 255 255));
-    color: rgb(var(--gray200, 31 41 55));
-    box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
-}
+/* El panel puede estar en modo claro (Arix lo permite). Se cambian los tokens
+   de la tarjeta, no los colores uno a uno, para que siga habiendo contraste. */
+.lightmode .logspterodactyl-card,
+html.light .logspterodactyl-card,
+body.light .logspterodactyl-card {
+    --lp-bg: #ffffff;
+    --lp-fg: #14181f;
+    --lp-fg-2: #333c4c;
+    --lp-fg-3: #4d586b;
+    --lp-border: #d3d9e4;
+    --lp-panel: rgba(15, 23, 42, .045);
 
-.lightmode .logspterodactyl-checks {
-    background: rgba(15, 23, 42, .035);
+    background: #ffffff;
+    background: var(--lp-bg);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, .18);
 }
 
 /* --- Variantes anadidas para la tarjeta de "instalacion fallida" --- */
@@ -338,4 +354,16 @@
 .logspterodactyl-badge-ok {
     background: rgba(45, 160, 90, .16);
     color: #6fd39b;
+}
+
+/* Aviso de "puede que no sea cosa tuya": se distingue del resto sin robarle
+   protagonismo a la lista de comprobacion, que sigue siendo lo que el cliente
+   tiene que leer. */
+.logspterodactyl-node-note {
+    padding: 10px 12px;
+    border: 1px solid rgba(224, 165, 58, .45);
+    border-left: 3px solid #e0a53a;
+    border-radius: 8px;
+    background: rgba(224, 165, 58, .10);
+    color: var(--lp-fg-2);
 }

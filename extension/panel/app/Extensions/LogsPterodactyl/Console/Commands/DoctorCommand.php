@@ -39,7 +39,7 @@ class DoctorCommand extends Command
         );
 
         // 2. Tablas.
-        foreach (['logspterodactyl_settings', 'logspterodactyl_events', 'logspterodactyl_install_events', 'logspterodactyl_mail_logs', 'logspterodactyl_resource_samples', 'logspterodactyl_update_runs'] as $table) {
+        foreach (['logspterodactyl_settings', 'logspterodactyl_events', 'logspterodactyl_install_events', 'logspterodactyl_mail_logs', 'logspterodactyl_resource_samples', 'logspterodactyl_update_runs', 'logspterodactyl_node_access'] as $table) {
             $problems += $this->check(Schema::hasTable($table), 'Tabla ' . $table, 'Ejecuta: php artisan logspterodactyl:install');
         }
 

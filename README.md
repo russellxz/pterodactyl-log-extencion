@@ -8,7 +8,21 @@ los correos que salen (y los que no), el envio de correos a los clientes, el
 consumo real de cada servidor con nombre y correo de su dueno, y la
 actualizacion del panel con respaldo y vuelta atras.
 
-> **Novedades de la 1.2.0.** Se actualiza con `sudo bash update.sh`.
+> **Novedades de la 1.3.0.** Se actualiza con `sudo bash update.sh`.
+>
+> - **Acceso SSH a los nodos**: la extension entra en la maquina y suelta ella
+>   misma el bloqueo de instalacion de wings, en vez de limitarse a decirte que
+>   comando ejecutar. Con boton manual o del todo automatico.
+> - **Sabe olvidar la huella SSH** cuando reinstalas la VPS, que si no la clave
+>   vieja impide conectar (el aviso de toda la vida de "REMOTE HOST
+>   IDENTIFICATION HAS CHANGED").
+> - Al cliente se le **sigue enseñando la lista** del token, el usuario y el
+>   repositorio privado aunque el nodo tenga la culpa: a veces las dos cosas
+>   estan mal a la vez.
+> - La tarjeta del cliente ya no hereda los colores del tema: **fondo opaco y
+>   contraste alto**, que habia textos grises que no se leian.
+>
+> **De la 1.2.0:**
 >
 > - **Las reinstalaciones se detectan al instante.** Antes se deducian cada
 >   minuto por las fechas del servidor y en uno que ya habia pasado por el
@@ -39,6 +53,7 @@ actualizacion del panel con respaldo y vuelta atras.
 - [Desinstalacion](#desinstalacion)
 - [Que trae](#que-trae)
 - [Cuando el problema esta en el nodo](#cuando-el-problema-esta-en-el-nodo-y-no-en-el-cliente)
+- [Acceso SSH a los nodos](#acceso-ssh-a-los-nodos)
 - [Comandos](#comandos)
 - [Si algo va mal](#si-algo-va-mal)
 
@@ -347,8 +362,12 @@ el panel por mucho que quiera la extension. Lo que si hace la extension:
 
 1. **Lo detecta.** Un fallo que llega en menos de 20 segundos justo despues de
    una parada es la firma inconfundible de ese bloqueo.
-2. **Te lo dice con el comando exacto**, arriba del todo en *Instalaciones*,
-   con el UUID del servidor ya puesto:
+2. **Lo arregla ella misma**, si le has dado el acceso SSH del nodo (ver
+   [Acceso SSH a los nodos](#acceso-ssh-a-los-nodos)). Entra, comprueba que el
+   contenedor sigue vivo y lo mata. Puede hacerlo sola en cuanto lo detecta, o
+   esperar a que le des al boton **"Hacerlo por mi (SSH)"**.
+3. **Y si no hay acceso configurado, te dice el comando exacto**, arriba del
+   todo en *Instalaciones*, con el UUID del servidor ya puesto:
 
    ```bash
    docker rm -f <uuid-del-servidor>_installer   # mata el contenedor colgado
@@ -356,11 +375,13 @@ el panel por mucho que quiera la extension. Lo que si hace la extension:
    ```
 
    No borra nada del servidor: solo el contenedor de instalacion.
-3. **No deja al cliente bloqueado** por un problema que no es suyo: le
+4. **No deja al cliente bloqueado** por un problema que no es suyo: le
    desbloquea el servidor igualmente.
-4. **No le manda a tocar sus datos.** En vez de la lista del token y el
-   repositorio, le sale *"esta vez no es cosa tuya, ya lo tenemos localizado"*,
-   para que no rompa una configuracion que estaba bien.
+5. **Le avisa, pero sin quitarle la lista de comprobacion.** Le sale un
+   *"puede que esta vez no sea cosa tuya, ya lo estamos mirando"* **encima** de
+   la lista del token, el usuario y el repositorio, no en su lugar: que el nodo
+   estuviera ocupado no quita que ademas haya puesto mal el token, y si se le
+   esconde la lista no revisa nada y vuelve a fallar.
 
 El aviso desaparece solo en cuanto ese servidor consigue instalarse.
 
@@ -516,6 +537,70 @@ vieja. La extension corrige esa linea y deja el resto intacto.
 
 ---
 
+## Acceso SSH a los nodos
+
+Pantalla **Nodos**. Aqui le das a la extension las credenciales de cada VPS para
+que pueda soltar ella misma el bloqueo de instalacion de wings, en vez de
+limitarse a decirte que comando ejecutar.
+
+Por nodo se guarda: host, puerto, usuario y **contrasena o clave privada**.
+Admite las dos, y la clave puede llevar su propia contrasena.
+
+Dos botones importantes:
+
+- **Probar conexion**: entra, ejecuta `id` y `docker version`, y te dice lo que
+  contesta la maquina. Hazlo siempre antes de fiarte.
+- **Arreglarlo solo**: si lo marcas, en cuanto se detecte que el nodo esta
+  rechazando instalaciones por tener el contenedor anterior colgado, la
+  extension entra, comprueba que sigue vivo y lo mata. Sin marcarlo, tienes el
+  boton **"Hacerlo por mi (SSH)"** en el aviso de *Instalaciones*.
+
+Tambien hay un **Reiniciar wings** para cuando ni matando el contenedor se
+arregla. Los servidores siguen encendidos; solo se corta la consola unos
+segundos.
+
+### Como esta protegido
+
+Dar acceso SSH a una aplicacion web no es cualquier cosa, asi que:
+
+- La contrasena o la clave se guarda **cifrada** con la `APP_KEY` del panel.
+  En la base de datos no hay nada legible, y **no se devuelve nunca** a la
+  pantalla: el campo es de solo escritura y se deja vacio para no cambiarla.
+- **No hay consola remota.** Los comandos no se escriben desde el panel: solo
+  se pueden lanzar los tres concretos que necesita esto. El unico dato variable
+  es el UUID de un servidor, que se valida como UUID antes de tocar nada, asi
+  que no hay forma de colar `; rm -rf /` ni parecidos.
+- Se usa **phpseclib**, que ya viene con Pterodactyl. Sin `exec()`, sin
+  `sshpass` y sin contrasenas en la linea de comandos (donde las ve cualquiera
+  con un `ps`).
+- Todo lo que se ejecuta en un nodo queda en la pestana **Registro**.
+
+Lo recomendable es una **clave privada** y un usuario dedicado, no el root con
+contrasena. Pero si lo mas comodo para ti es la contrasena de root, funciona
+igual.
+
+### Cuando reinstalas la VPS
+
+Al reinstalar una maquina le cambia su clave de servidor. Con la vieja
+guardada, cualquier conexion se rechaza: es el aviso de toda la vida de
+*REMOTE HOST IDENTIFICATION HAS CHANGED*, el que obliga a editar el
+`known_hosts` a mano.
+
+La extension guarda esa huella (en el mismo formato `SHA256:...` que enseña
+`ssh-keygen -l`) y la comprueba en cada conexion. Si cambia:
+
+- **No se conecta.** Manda credenciales a una maquina que no es la que era, ni
+  de broma.
+- Te lo dice con las dos huellas, la vieja y la nueva.
+- Y tienes el boton **Olvidar huella**: la borra y la proxima conexion acepta
+  la clave nueva y la guarda. Es el `ssh-keygen -R` de siempre, pero sin
+  acordarte de el.
+
+Si tu no has tocado esa maquina y la huella cambia, no la olvides: eso no es
+una reinstalacion, es alguien poniendose en medio.
+
+---
+
 ## Comandos
 
 | Comando | Para que |
@@ -625,7 +710,10 @@ Comprueba que esta activado en Configuracion y que el cron del panel corre.
 Mira arriba del todo en **Instalaciones**: si sale el aviso rojo de nodo
 atascado, no es cosa del panel. Wings sigue ocupado con el contenedor de
 instalacion anterior y rechaza cualquier instalacion nueva de ese servidor.
-Ahi mismo tienes el comando con el UUID puesto:
+
+Si tienes el acceso SSH puesto ([Nodos](#acceso-ssh-a-los-nodos)), pulsa
+**"Hacerlo por mi (SSH)"** en ese mismo aviso y listo. Si no, ahi tienes el
+comando con el UUID ya puesto para ejecutarlo tu:
 
 ```bash
 docker rm -f <uuid-del-servidor>_installer
@@ -633,6 +721,12 @@ docker rm -f <uuid-del-servidor>_installer
 
 Esta explicado en detalle en
 [Cuando el problema esta en el nodo](#cuando-el-problema-esta-en-el-nodo-y-no-en-el-cliente).
+
+### "REMOTE HOST IDENTIFICATION HAS CHANGED" al conectar con un nodo
+
+Has reinstalado esa VPS y su clave de servidor es otra. En **Nodos**, boton
+**Olvidar huella**, y vuelve a probar. Si TU no has tocado esa maquina, no lo
+hagas: mirala antes.
 
 ### El sistema no detecta que un servidor se esta reinstalando
 

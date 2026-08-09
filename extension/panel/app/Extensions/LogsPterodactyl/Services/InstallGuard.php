@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Mail;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\ExtensionEvent;
 use Pterodactyl\Extensions\LogsPterodactyl\Models\InstallEvent;
+use Pterodactyl\Extensions\LogsPterodactyl\Models\NodeAccess;
 use Pterodactyl\Extensions\LogsPterodactyl\Support\Settings;
 use Pterodactyl\Models\Server;
 use Pterodactyl\Repositories\Wings\DaemonServerRepository;
@@ -774,6 +775,78 @@ class InstallGuard
             'segundos' => $segundos,
             'que_hacer_en_el_nodo' => $event->nodeCommands(),
         ], $event->server_id);
+
+        // Y si el nodo tiene acceso SSH configurado, se arregla solo.
+        $this->fixNode($event);
+    }
+
+    /**
+     * Intenta soltar el bloqueo entrando por SSH en el nodo.
+     *
+     * Solo se hace si el administrador ha guardado el acceso de ese nodo y ha
+     * marcado "arreglarlo solo". Sin eso, la extension se limita a decir que
+     * comando hay que ejecutar.
+     */
+    public function fixNode(InstallEvent $event): ?array
+    {
+        if (!$event->server_uuid || !$event->node_id) {
+            return null;
+        }
+
+        try {
+            $acceso = NodeAccess::query()
+                ->where('node_id', $event->node_id)
+                ->where('enabled', true)
+                ->where('auto_fix', true)
+                ->first();
+
+            if (!$acceso) {
+                return null;
+            }
+
+            $ssh = app(NodeSsh::class);
+            $estado = $ssh->installerStatus($acceso, $event->server_uuid);
+
+            if (!$estado['ok']) {
+                ExtensionEvent::log('warning', 'nodos', 'No se pudo mirar el contenedor de instalacion en el nodo', [
+                    'nodo' => $event->node_name,
+                    'error' => $estado['error'],
+                ], $event->server_id);
+
+                return null;
+            }
+
+            if (!$estado['existe']) {
+                // No habia contenedor colgado: el bloqueo era de otra cosa.
+                return null;
+            }
+
+            $resultado = $ssh->killInstaller($acceso, $event->server_uuid);
+
+            $event->forceFill([
+                'notes' => trim((string) $event->notes) . ($resultado['ok']
+                    ? ' | La extension entro en el nodo y elimino el contenedor colgado: el servidor ya se puede reinstalar.'
+                    : ' | Se intento eliminar el contenedor en el nodo y no se pudo: ' . mb_substr((string) ($resultado['error'] ?: $resultado['salida']), 0, 200)),
+            ])->save();
+
+            if ($resultado['ok']) {
+                ExtensionEvent::log('info', 'nodos', sprintf(
+                    'Bloqueo de instalacion liberado solo en el nodo "%s" para "%s"',
+                    $event->node_name ?: '?',
+                    $event->server_name ?: '?'
+                ), [
+                    'contenedor_que_estaba_colgado' => $estado['detalle'],
+                ], $event->server_id);
+            }
+
+            return $resultado;
+        } catch (\Throwable $e) {
+            ExtensionEvent::log('error', 'nodos', 'Fallo al intentar arreglar el nodo por SSH', [
+                'error' => mb_substr($e->getMessage(), 0, 300),
+            ], $event->server_id);
+
+            return null;
+        }
     }
 
     /**
