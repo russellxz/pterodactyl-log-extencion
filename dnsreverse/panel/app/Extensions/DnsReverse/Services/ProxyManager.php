@@ -171,12 +171,32 @@ class ProxyManager
         [$modoSsl, $cert, $clave] = $this->resolverCertificado($entrada, $dominioBase, $tipo, $dominio);
 
         // --- A partir de aqui ya se toca el mundo exterior -----------------
+        //
+        // EL ORDEN IMPORTA, y mucho. Antes se creaba el registro en Cloudflare
+        // y se le pedia el certificado a Let's Encrypt en el mismo instante.
+        // Cloudflare acepta el registro al momento pero tarda unos segundos en
+        // servirlo, asi que Let's Encrypt llegaba a mirar cuando el nombre
+        // todavia no existia y contestaba NXDOMAIN. El certificado no se
+        // emitia, y como el fallo tumbaba toda la operacion, hasta el registro
+        // DNS se borraba: el cliente se quedaba sin nada.
+        //
+        // Ahora va por pasos, y cada uno se apoya en el anterior:
+        //   1. registro en Cloudflare
+        //   2. el sitio se monta en el nodo por http (sin certificado)
+        //   3. se espera a que el nombre resuelva DE VERDAD
+        //   4. y solo entonces se pide el certificado
+        //
+        // Si el certificado falla, el dominio se queda funcionando por http y
+        // se reintenta luego. Nunca se pierde el trabajo hecho.
 
         $registroCf = null;
         $registroSrv = null;
         $cliente = null;
+        $avisoCertificado = null;
+        $modoGuardado = $modoSsl;
 
         try {
+            // --- 1. Cloudflare ---
             if ($dominioBase !== null && $dominioBase->hasToken()) {
                 $cliente = CloudflareClient::for($dominioBase);
                 $naranja = $dominioBase->shouldProxy($modoSsl);
@@ -191,17 +211,70 @@ class ProxyManager
                 }
             }
 
-            WingsClient::for($nodo)->createProxy([
+            $wings = WingsClient::for($nodo);
+
+            $peticion = [
                 'domain' => $dominio,
                 'ip' => trim((string) $allocation->ip),
                 'port' => (int) $allocation->port,
-                'ssl' => $modoSsl !== ProxyRecord::SSL_NONE,
-                'mode' => $modoSsl,
+                'ssl' => false,
+                'mode' => ProxyRecord::SSL_NONE,
                 'email' => (string) $user->email,
-                'cert' => $cert,
-                'key' => $clave,
+                'cert' => '',
+                'key' => '',
                 'uuid' => (string) $server->uuid,
-            ]);
+            ];
+
+            // --- 2. El sitio, primero sin certificado ---
+            //
+            // Con Let's Encrypt esto ademas es imprescindible: la comprobacion
+            // del certificado entra por el puerto 80 de este mismo sitio.
+            if ($modoSsl === ProxyRecord::SSL_LETSENCRYPT) {
+                $wings->createProxy($peticion);
+
+                // --- 3. Esperar a que el nombre exista de verdad ---
+                if ($registroCf !== null) {
+                    $espera = DomainChecker::esperarResolucion($dominio, 90);
+
+                    DnsEvent::record($espera['ok'] ? 'info' : 'warning', 'dns.wait',
+                        'Espera a que resuelva el DNS: ' . $espera['detalle'],
+                        ['segundos' => $espera['segundos']], $dominio, (int) $server->id, (int) $user->id);
+
+                    if (!$espera['ok']) {
+                        $avisoCertificado = 'El dominio ya esta creado y funcionando por http, pero todavia no se ve '
+                            . 'desde fuera, asi que no se ha podido pedir el certificado. Es normal que tarde unos '
+                            . 'minutos la primera vez. Se reintentara solo esta madrugada.';
+                    }
+                }
+
+                // --- 4. Y ahora si, el certificado ---
+                if ($avisoCertificado === null) {
+                    try {
+                        $wings->createProxy(array_merge($peticion, [
+                            'ssl' => true,
+                            'mode' => ProxyRecord::SSL_LETSENCRYPT,
+                        ]));
+                    } catch (\Throwable $e) {
+                        // El certificado es lo unico que ha fallado. El dominio
+                        // funciona por http, asi que NO se tira todo abajo.
+                        $avisoCertificado = 'Tu dominio ya funciona, pero el certificado no se ha podido emitir todavia: '
+                            . $e->getMessage();
+                    }
+                }
+
+                if ($avisoCertificado !== null) {
+                    // Queda pendiente: la tarea de las madrugadas lo reintenta.
+                    $modoGuardado = ProxyRecord::SSL_LETSENCRYPT;
+                }
+            } else {
+                // Sin certificado, o con certificado de origen: de una vez.
+                $wings->createProxy(array_merge($peticion, [
+                    'ssl' => $modoSsl !== ProxyRecord::SSL_NONE,
+                    'mode' => $modoSsl,
+                    'cert' => $cert,
+                    'key' => $clave,
+                ]));
+            }
         } catch (\Throwable $e) {
             // Se deshace lo que si se habia llegado a crear.
             if ($cliente !== null) {
@@ -227,20 +300,24 @@ class ProxyManager
             'base_domain' => $dominioBase?->domain,
             'cf_record_id' => $registroSrv !== null ? ($registroCf . ',' . $registroSrv) : $registroCf,
             'allocation_id' => $allocation->id,
-            'ssl_enabled' => $modoSsl !== ProxyRecord::SSL_NONE,
-            'ssl_mode' => $modoSsl,
+            // Si el certificado quedo pendiente, el sitio va por http de
+            // momento: ssl_enabled a false para que nginx no apunte a un
+            // certificado que no existe.
+            'ssl_enabled' => $modoSsl !== ProxyRecord::SSL_NONE && $avisoCertificado === null,
+            'ssl_mode' => $modoGuardado,
             'domain_id' => $dominioBase?->id,
             'created_by' => $user->id,
             'synced_at' => now(),
-            'last_error' => null,
+            'last_error' => $avisoCertificado,
         ]);
 
-        DnsEvent::record('info', 'create', 'DNS creado', [
-            'tipo' => $tipo,
-            'modo_ssl' => $modoSsl,
-            'destino' => $allocation->ip . ':' . $allocation->port,
-            'nodo' => $nodo->name,
-        ], $dominio, (int) $server->id, (int) $user->id);
+        DnsEvent::record($avisoCertificado === null ? 'info' : 'warning', 'create',
+            $avisoCertificado === null ? 'DNS creado' : 'DNS creado con el certificado pendiente', [
+                'tipo' => $tipo,
+                'modo_ssl' => $modoGuardado,
+                'destino' => $allocation->ip . ':' . $allocation->port,
+                'nodo' => $nodo->name,
+            ], $dominio, (int) $server->id, (int) $user->id);
 
         $this->registrarActividadDelPanel('server:dnsreverse.create', $server, [
             'domain' => $dominio,
@@ -249,6 +326,86 @@ class ProxyManager
         ]);
 
         return $registro->fresh(['allocation']);
+    }
+
+    /**
+     * Vuelve a intentar el certificado de un dominio que se quedo a medias.
+     *
+     * Pasa cuando el certificado no se pudo emitir en el momento de crear el
+     * dominio (casi siempre porque el DNS aun no se veia desde fuera). El
+     * dominio esta funcionando por http y aqui se le pone el candado.
+     *
+     * @return array{ok: bool, message: string}
+     */
+    public function reintentarCertificado(ProxyRecord $registro): array
+    {
+        $allocation = $registro->allocation;
+        $servidor = $registro->server;
+        $nodo = $allocation?->node ?? $servidor?->node;
+
+        if ($allocation === null || $nodo === null) {
+            return ['ok' => false, 'message' => 'Sin asignacion o sin nodo.'];
+        }
+
+        $espera = DomainChecker::esperarResolucion((string) $registro->domain, 30);
+
+        if (!$espera['ok']) {
+            $registro->forceFill(['last_error' => 'El dominio sigue sin verse desde fuera. ' . $espera['detalle']])->save();
+
+            return ['ok' => false, 'message' => 'Todavia no resuelve: ' . $espera['detalle']];
+        }
+
+        $correo = '';
+
+        try {
+            $correo = (string) ($servidor?->user?->email ?? '');
+        } catch (\Throwable) {
+            // Dueño borrado: wings usa la cuenta ACME que ya tiene el nodo.
+        }
+
+        try {
+            WingsClient::for($nodo)->createProxy([
+                'domain' => (string) $registro->domain,
+                'ip' => trim((string) $allocation->ip),
+                'port' => (int) $allocation->port,
+                'ssl' => true,
+                'mode' => ProxyRecord::SSL_LETSENCRYPT,
+                'email' => $correo,
+                'cert' => '',
+                'key' => '',
+                'uuid' => $servidor?->uuid,
+            ]);
+        } catch (\Throwable $e) {
+            $registro->forceFill(['last_error' => $e->getMessage()])->save();
+
+            return ['ok' => false, 'message' => $e->getMessage()];
+        }
+
+        $registro->forceFill([
+            'ssl_enabled' => true,
+            'ssl_mode' => ProxyRecord::SSL_LETSENCRYPT,
+            'cert_expires_at' => now()->addDays(90),
+            'last_error' => null,
+            'synced_at' => now(),
+        ])->save();
+
+        DnsEvent::record('info', 'cert.retry', 'Certificado emitido en el reintento', [], (string) $registro->domain, $registro->server_id);
+
+        return ['ok' => true, 'message' => 'Certificado emitido.'];
+    }
+
+    /**
+     * DNS a los que les falta el certificado.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, ProxyRecord>
+     */
+    public function certificadosPendientes()
+    {
+        return ProxyRecord::query()
+            ->with(['server', 'allocation.node'])
+            ->where('ssl_mode', ProxyRecord::SSL_LETSENCRYPT)
+            ->where('ssl_enabled', false)
+            ->get();
     }
 
     // -----------------------------------------------------------------------

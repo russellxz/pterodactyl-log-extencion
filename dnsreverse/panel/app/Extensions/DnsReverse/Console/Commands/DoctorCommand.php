@@ -34,6 +34,7 @@ class DoctorCommand extends Command
 
         $this->baseDeDatos();
         $this->configuracion($settings);
+        $this->pantallaDelCliente($settings);
         $this->dominios();
         $this->nodos();
         $this->huerfanos();
@@ -129,6 +130,51 @@ class DoctorCommand extends Command
                 $this->aviso($bloqueados . ' servidor(es) con el limite a 0 (no pueden crear DNS).');
             }
         }
+    }
+
+    /**
+     * De donde sale el boton del area de cliente.
+     *
+     * El fallo mas facil de cometer aqui es tener el modo nativo puesto y que
+     * una actualizacion del panel se lleve por delante lo compilado: la
+     * extension sigue funcionando pero los clientes no ven nada y nadie sabe
+     * por que. Esta comprobacion lo canta.
+     */
+    private function pantallaDelCliente(Settings $settings): void
+    {
+        $this->seccion('Pantalla del cliente');
+
+        $inyectado = $settings->bool('client_ui_enabled');
+        $componente = base_path('resources/scripts/components/server/dnsreverse/DnsReverseContainer.tsx');
+        $rutas = base_path('resources/scripts/routers/routes.ts');
+        $compilado = is_file($componente)
+            && is_file($rutas)
+            && str_contains((string) @file_get_contents($rutas), 'dnsreverse:inicio');
+
+        if ($inyectado && !$compilado) {
+            $this->bien('Modo inyectado: el boton lo pone el panel, sin compilar nada');
+
+            return;
+        }
+
+        if (!$inyectado && $compilado) {
+            $this->bien('Modo nativo: el boton esta compilado dentro del panel');
+            $this->aviso('Acuerdate de volver a compilar despues de cada actualizacion del panel (install-frontend.sh).');
+
+            return;
+        }
+
+        if (!$inyectado && !$compilado) {
+            $this->mal(
+                'Tus clientes NO ven la pantalla: el modo inyectado esta apagado y no hay nada compilado.',
+                'php artisan dnsreverse:ui inject   (o vuelve a lanzar install-frontend.sh)'
+            );
+
+            return;
+        }
+
+        $this->aviso('El boton puede salir dos veces: hay codigo compilado y ademas el modo inyectado encendido.');
+        $this->line('          arreglo: php artisan dnsreverse:ui native');
     }
 
     private function dominios(): void

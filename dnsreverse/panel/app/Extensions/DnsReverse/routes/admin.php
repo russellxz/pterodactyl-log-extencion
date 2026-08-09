@@ -30,6 +30,7 @@ Route::post('/domains/{domain}/delete', [Admin\DomainsController::class, 'destro
 // --- DNS creados por los clientes ---
 Route::get('/records', [Admin\RecordsController::class, 'index'])->name('records');
 Route::get('/records/{record}/check', [Admin\RecordsController::class, 'check'])->name('records.check');
+Route::post('/records/{record}/certificate', [Admin\RecordsController::class, 'certificate'])->name('records.certificate');
 Route::post('/records/{record}/sync', [Admin\RecordsController::class, 'sync'])->name('records.sync');
 Route::post('/records/{record}/delete', [Admin\RecordsController::class, 'destroy'])->name('records.delete');
 Route::post('/records/purge', [Admin\RecordsController::class, 'purge'])->name('records.purge');

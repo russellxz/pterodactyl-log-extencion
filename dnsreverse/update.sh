@@ -72,7 +72,25 @@ if ! bash "$AQUI/install.sh" "$PANEL"; then
     exit 1
 fi
 
-# --- 3. Resumen --------------------------------------------------------------
+# --- 3. Modo nativo ---------------------------------------------------------
+#
+# Si el boton del cliente estaba compilado dentro del panel, la actualizacion
+# trae una version nueva del componente y hay que volver a compilar. Se hace
+# solo para no dejar al cliente con la pantalla vieja.
+
+if grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null; then
+    title "3. Recompilando el panel (tenias el modo nativo)"
+
+    if ! bash "$AQUI/install-frontend.sh" "$PANEL"; then
+        err "No se pudo recompilar el frontend."
+        printf '  La extension SI esta actualizada. Mientras tanto, para que tus\n'
+        printf '  clientes no se queden sin pantalla:\n'
+        printf '      cd %s && php artisan dnsreverse:ui inject\n\n' "$PANEL"
+        exit 1
+    fi
+fi
+
+# --- 4. Resumen --------------------------------------------------------------
 
 printf '\n%s  Extension actualizada%s\n' "$G$B" "$N"
 printf '  ---------------------------------------------------------------\n'

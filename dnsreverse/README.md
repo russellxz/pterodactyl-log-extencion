@@ -16,6 +16,7 @@ solo archivo del panel**, asi que ya no desaparece cada vez que actualizas.
 - [Que cambia respecto a la version anterior](#que-cambia-respecto-a-la-version-anterior)
 - [Antes de empezar](#antes-de-empezar)
 - [Instalacion](#instalacion)
+- [Los dos modos del boton del cliente](#los-dos-modos-del-boton-del-cliente)
 - [Actualizar](#actualizar)
 - [Desinstalar](#desinstalar)
 - [Que pasa cuando actualizo el panel](#que-pasa-cuando-actualizo-el-panel)
@@ -32,7 +33,7 @@ solo archivo del panel**, asi que ya no desaparece cada vez que actualizas.
 
 | | Version anterior | DNS Reverse |
 |---|---|---|
-| Instalacion | Editar ~20 archivos del panel a mano + `yarn build` | Un script, sin tocar el panel y sin recompilar nada |
+| Instalacion | Editar ~20 archivos del panel a mano + `yarn build` | Un script, sin tocar el panel y sin recompilar nada (el `yarn build` sigue disponible como [modo nativo](#los-dos-modos-del-boton-del-cliente)) |
 | Al actualizar el panel | Desaparece y hay que rehacerlo todo | Se recupera con un comando; los datos no se tocan |
 | Tokens de Cloudflare | **Uno solo** para todos los dominios | **Uno por dominio**: puedes mezclar varias cuentas |
 | Certificados de origen | **Uno solo** para todos | **Uno por dominio** |
@@ -176,6 +177,87 @@ cd /var/www/pterodactyl && php artisan dnsreverse:doctor
 
 ---
 
+## Los dos modos del boton del cliente
+
+El boton **DNS Reverse** que ven tus clientes en el menu de su servidor puede
+salir de dos sitios. La pantalla es exactamente la misma en los dos casos; lo
+unico que cambia es de donde viene el boton.
+
+|                                     | Modo inyectado *(por defecto)* | Modo nativo *(`yarn build`)* |
+| ----------------------------------- | ------------------------------ | ---------------------------- |
+| Hay que compilar                    | No                             | Si, varios minutos y ~2 GB de RAM |
+| Aguanta una actualizacion del panel | Si                             | No, hay que recompilar       |
+| Anade algo a las paginas del panel  | Si, una etiqueta al final      | No, nada                     |
+| Toca archivos del panel             | Ninguno                        | `resources/scripts/routers/routes.ts` |
+| Se instala en                       | 10 segundos                    | 5-10 minutos                 |
+
+**Cual elegir:** si no tienes ningun problema, dejalo como esta (inyectado): es
+lo que menos mantenimiento da. El modo nativo es para cuando quieres que el
+panel salga por el cable **exactamente** como lo publica Pterodactyl, sin una
+sola linea anadida: es como lo hacia la extension antigua.
+
+### Activar el modo nativo
+
+```bash
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install-frontend.sh
+```
+
+Lo que hace, por orden:
+
+1. Comprueba que estan `node` y `yarn` (**si falta alguno, se para sin tocar nada**).
+2. Copia la pantalla a `resources/scripts/components/server/dnsreverse/`.
+3. Anade la ruta a `routes.ts`, entre marcas `// dnsreverse:inicio` y
+   `// dnsreverse:fin`, y guarda una copia del archivo original al lado.
+4. **Guarda una copia de `public/assets`** en `storage/dnsreverse-frontend-<fecha>`.
+5. Compila (`yarn build:production`).
+6. Apaga el modo inyectado para que el boton no salga dos veces.
+
+> **Si la compilacion falla, el panel se queda como estaba.** Se devuelve
+> `public/assets` desde la copia, se deshace el parche de `routes.ts` y se borra
+> el componente. En ningun momento se queda el panel en blanco.
+
+### Despues de CADA actualizacion del panel
+
+La actualizacion de Pterodactyl reemplaza `routes.ts` y los archivos compilados,
+asi que el boton desaparece. Hay que volver a ponerlo:
+
+```bash
+cd /opt/pterodactyl-log-extencion && git pull
+sudo bash dnsreverse/install.sh
+sudo bash dnsreverse/install-frontend.sh
+```
+
+**Tus DNS no se tocan en ningun momento.** Lo unico que se pierde al actualizar
+el panel es el boton, y estos dos comandos lo devuelven.
+
+Si un dia no puedes o no quieres recompilar, tienes la salida rapida: vuelve al
+modo inyectado y los clientes recuperan la pantalla al instante.
+
+```bash
+cd /var/www/pterodactyl && php artisan dnsreverse:ui inject
+```
+
+### Volver al modo inyectado del todo
+
+```bash
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install-frontend.sh --remove
+```
+
+Quita el componente, devuelve `routes.ts` a como lo trae Pterodactyl, recompila
+y vuelve a encender el modo inyectado.
+
+### Ver en que modo estas
+
+```bash
+cd /var/www/pterodactyl && php artisan dnsreverse:ui
+```
+
+`php artisan dnsreverse:doctor` tambien lo comprueba y avisa de los dos casos
+raros: modo nativo apuntado pero sin compilar (los clientes no ven nada), y los
+dos modos encendidos a la vez (el boton saldria dos veces).
+
+---
+
 ## Actualizar
 
 ```bash
@@ -275,6 +357,27 @@ asi que **no gasta cupo de Let's Encrypt**.
 > Lo mismo vale si reinstalas un nodo desde cero: instalas el complemento de
 > wings, ejecutas `dnsreverse:sync` y todos los dominios de ese nodo vuelven a
 > montarse solos.
+
+### Si usas el modo nativo
+
+Ahi la actualizacion se lleva ademas `routes.ts` y los archivos compilados, asi
+que el boton del cliente desaparece. Hay que recompilar:
+
+```bash
+cd /opt/pterodactyl-log-extencion && git pull
+sudo bash dnsreverse/install.sh
+sudo bash dnsreverse/install-frontend.sh
+```
+
+`install.sh` te avisa el solo cuando detecta este caso, y `dnsreverse:doctor`
+tambien. Tus DNS siguen intactos: lo unico que se pierde es el boton.
+
+Si no quieres recompilar ahora mismo, vuelve al modo inyectado y los clientes
+recuperan la pantalla al instante:
+
+```bash
+cd /var/www/pterodactyl && php artisan dnsreverse:ui inject
+```
 
 ---
 
@@ -510,13 +613,18 @@ Todos se ejecutan desde la carpeta del panel (`cd /var/www/pterodactyl`).
 | `php artisan dnsreverse:renew --days=45 --force` | Renueva con mas margen, aunque la automatica este apagada. |
 | `php artisan dnsreverse:uninstall` | Informa de lo que hay guardado. Por defecto **no borra nada**. |
 | `php artisan dnsreverse:uninstall --borrar-config` | Borra dominios, tokens, certificados y ajustes. |
+| `php artisan dnsreverse:ui` | Dice si el boton del cliente esta en modo inyectado o nativo. |
+| `php artisan dnsreverse:ui inject` | Vuelve al modo inyectado (sin compilar). Es la salida rapida. |
+| `php artisan dnsreverse:ui native` | Marca el modo nativo (solo si ya compilaste con `install-frontend.sh`). |
 
 Y los scripts, desde la carpeta del repositorio:
 
 | Script | Donde | Para que |
 |---|---|---|
 | `sudo bash dnsreverse/install.sh` | panel | Instalar o reinstalar |
-| `sudo bash dnsreverse/update.sh` | panel | Actualizar |
+| `sudo bash dnsreverse/update.sh` | panel | Actualizar (recompila solo si estabas en modo nativo) |
+| `sudo bash dnsreverse/install-frontend.sh` | panel | Compilar el boton dentro del panel (modo nativo) |
+| `sudo bash dnsreverse/install-frontend.sh --remove` | panel | Deshacer el modo nativo y volver al inyectado |
 | `sudo bash dnsreverse/uninstall.sh` | panel | Desinstalar sin perder datos |
 | `sudo bash dnsreverse/permissions.sh` | panel | Repasar permisos |
 | `sudo bash dnsreverse/wings/install-wings.sh` | **nodo** | Instalar o actualizar el complemento de wings |
@@ -550,25 +658,44 @@ Primero: la entrada sale **dentro de un servidor**, en la barra de secciones
 (Consola, Archivos, Bases de datos...). En la lista de servidores no aparece,
 porque ahi todavia no se sabe de que servidor se trata.
 
-Si dentro de un servidor tampoco sale:
+Si dentro de un servidor tampoco sale, lo primero es ver **en que modo estas**,
+porque el sitio donde mirar cambia:
+
+```bash
+cd /var/www/pterodactyl && php artisan dnsreverse:doctor
+```
+
+En el apartado *Pantalla del cliente* te lo dice, y avisa de los dos casos que
+dejan al cliente sin nada: modo nativo sin compilar, y los dos modos a la vez.
+
+Despues:
 
 1. **Ctrl+F5** para tirar la cache del navegador.
-2. Comprueba que el archivo llega: abre
+2. Comprueba que el limite de ese servidor no esta a **0**
+   (*Admin -> DNS Reverse -> Limites*).
+3. Comprueba que su tipo de servidor no esta en *Desactivado*
+   (*Admin -> DNS Reverse -> Tipos de servidor*).
+
+**Si estas en modo inyectado:**
+
+4. Comprueba que el archivo llega: abre
    `https://TU-PANEL/extensions/dnsreverse/client.js`. Tiene que salir codigo,
    no un error 404. Si da 404, vuelve a lanzar `install.sh`.
-3. Comprueba que el limite de ese servidor no esta a **0**
-   (*Admin -> DNS Reverse -> Limites*).
-4. Comprueba que su tipo de servidor no esta en *Desactivado*
-   (*Admin -> DNS Reverse -> Tipos de servidor*).
 5. Abre la consola del navegador (**F12 -> Consola**). La extension deja escrito
    ahi que ha hecho:
    - `entrada anadida a la barra del servidor` &rarr; esta puesta; si no la ves,
      mira mas a la derecha en la barra (se puede desplazar).
    - `todavia no se encuentra la barra del servidor, reintentando` &rarr; el tema
-     dibuja el menu de otra forma. Sigue intentandolo cada 700 ms, asi que si
-     el mensaje se repite sin parar es que no lo reconoce.
+     dibuja el menu de otra forma; lo reintenta cuando el panel vuelve a dibujar.
    - Si no aparece **ningun** mensaje, el archivo no se esta cargando: repasa el
-     punto 2.
+     punto 4.
+
+**Si estas en modo nativo:**
+
+4. Vuelve a compilar: `sudo bash dnsreverse/install-frontend.sh`. Lo mas normal
+   es que hayas actualizado el panel y la actualizacion se lo llevara.
+5. Si no puedes compilar ahora, vuelve al modo inyectado y lo tienes al
+   instante: `php artisan dnsreverse:ui inject`.
 
 Mientras tanto, la pantalla siempre se puede abrir por la direccion directa:
 `https://TU-PANEL/server/ID-DEL-SERVIDOR/dnsreverse`
