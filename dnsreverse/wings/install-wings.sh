@@ -23,6 +23,7 @@ set -uo pipefail
 
 VERSION_WINGS=""
 VERSION_GO="1.22.5"
+USAR_ULTIMA=0
 TRABAJO="/usr/local/src/dnsreverse-wings"
 DESTINO="/usr/local/bin/wings"
 CERTS="/srv/server_certs"
@@ -32,13 +33,36 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --version) VERSION_WINGS="${2:-}"; shift 2 ;;
         --go) VERSION_GO="${2:-}"; shift 2 ;;
+        --latest) USAR_ULTIMA=1; shift ;;
         --help|-h)
-            printf 'Uso: sudo bash install-wings.sh [--version v1.11.13] [--go 1.22.5]\n'
+            printf 'Uso: sudo bash install-wings.sh [--version v1.11.13] [--latest] [--go 1.22.5]\n\n'
+            printf '  --version   Compilar contra esa version exacta de wings (lo recomendado).\n'
+            printf '  --latest    Usar la ultima publicada. Solo si sabes que tu panel la admite.\n'
+            printf '  --go        Version de Go a instalar si hace falta.\n\n'
             exit 0
             ;;
         *) printf 'Opcion desconocida: %s\n' "$1"; exit 1 ;;
     esac
 done
+
+# wings expone su version con el subcomando "version", NO con "--version"
+# (con el flag suelta "unknown flag" y sale con error).
+#
+# Ademas, un wings compilado desde codigo fuente no lleva el numero grabado y
+# responde "wings vdevelop": es justo lo que pasa cuando ya tienes el
+# complemento antiguo puesto, porque tambien se compilo a mano.
+version_de_wings() {
+    local binario="$1"
+    local salida
+
+    salida="$("$binario" version 2>/dev/null | head -1)"
+
+    if [ -z "$salida" ]; then
+        salida="$("$binario" --version 2>/dev/null | head -1)"
+    fi
+
+    printf '%s' "$salida" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
+}
 
 if [ -t 1 ]; then
     B=$'\033[1m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; N=$'\033[0m'
@@ -77,30 +101,79 @@ fi
 
 title "1. Averiguando la version de wings"
 
-if [ -z "$VERSION_WINGS" ]; then
-    DETECTADA="$("$DESTINO" --version 2>/dev/null | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+ULTIMA_PUBLICADA=""
+
+obtener_ultima() {
+    ULTIMA_PUBLICADA="$(curl -fsSL https://api.github.com/repos/pterodactyl/wings/releases/latest 2>/dev/null \
+        | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
+}
+
+if [ -n "$VERSION_WINGS" ]; then
+    case "$VERSION_WINGS" in
+        v*) ;;
+        *) VERSION_WINGS="v$VERSION_WINGS" ;;
+    esac
+    ok "Version indicada a mano: $VERSION_WINGS"
+elif [ "$USAR_ULTIMA" -eq 1 ]; then
+    obtener_ultima
+
+    if [ -z "$ULTIMA_PUBLICADA" ]; then
+        err "No se pudo consultar la ultima version publicada. Indicala a mano con --version."
+        exit 1
+    fi
+
+    VERSION_WINGS="$ULTIMA_PUBLICADA"
+    warn "Se usara la ultima publicada por peticion tuya: $VERSION_WINGS"
+else
+    DETECTADA="$(version_de_wings "$DESTINO")"
 
     if [ -n "$DETECTADA" ]; then
-        case "$DETECTADA" in
-            v*) VERSION_WINGS="$DETECTADA" ;;
-            *) VERSION_WINGS="v$DETECTADA" ;;
-        esac
+        VERSION_WINGS="v$DETECTADA"
         ok "wings instalado: $VERSION_WINGS"
     else
-        warn "No se pudo leer la version. Se usara la ultima publicada."
-        VERSION_WINGS="$(curl -fsSL https://api.github.com/repos/pterodactyl/wings/releases/latest 2>/dev/null \
-            | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
+        # Aqui NO se coge la ultima version por las buenas. Compilar contra una
+        # version distinta de la que tienes puesta te cambiaria wings de version
+        # sin querer, y una wings mas nueva que tu panel puede dar problemas.
+        obtener_ultima
 
-        if [ -z "$VERSION_WINGS" ]; then
-            err "Tampoco se pudo consultar la ultima version. Indicala a mano:"
-            printf '      sudo bash install-wings.sh --version v1.11.13\n\n'
-            exit 1
+        err "No se ha podido averiguar que version de wings tienes."
+        printf '\n'
+        printf '  Es lo normal si tu wings ya esta compilado a mano (por ejemplo si ya\n'
+        printf '  tenias puesto el complemento antiguo): esos binarios responden\n'
+        printf '  "wings vdevelop" y no dicen el numero.\n'
+        printf '\n'
+        printf '  %sNo se sigue adelante a proposito%s: compilar contra otra version te\n' "$B" "$N"
+        printf '  cambiaria wings sin avisar, y una wings mas nueva que tu panel puede\n'
+        printf '  romper la conexion con el.\n'
+        printf '\n'
+        printf '  Como saber tu version:\n'
+        printf '    - En el panel: Admin -> Nodes -> tu nodo. Arriba sale la version\n'
+        printf '      del demonio que el nodo le esta reportando.\n'
+        printf '    - O en este nodo:  wings version\n'
+        printf '    - Si las dos dicen "develop", usa la misma serie que tu panel:\n'
+        printf '      panel 1.11.x  ->  wings v1.11.13\n'
+        printf '\n'
+        printf '  Y vuelve a lanzarlo indicandola:\n'
+        printf '    %ssudo bash install-wings.sh --version v1.11.13%s\n' "$B" "$N"
+        printf '\n'
+
+        if [ -n "$ULTIMA_PUBLICADA" ]; then
+            printf '  Si de verdad quieres la ultima publicada (%s), y sabes que tu\n' "$ULTIMA_PUBLICADA"
+            printf '  panel la admite:\n'
+            printf '    sudo bash install-wings.sh --latest\n\n'
         fi
 
-        ok "Se usara $VERSION_WINGS"
+        exit 1
     fi
-else
-    ok "Version indicada a mano: $VERSION_WINGS"
+fi
+
+# Aviso si se va a compilar contra una version distinta de la instalada.
+INSTALADA="$(version_de_wings "$DESTINO")"
+
+if [ -n "$INSTALADA" ] && [ "v$INSTALADA" != "$VERSION_WINGS" ]; then
+    warn "Tienes wings v$INSTALADA y se va a compilar $VERSION_WINGS: te cambiara de version."
+    warn "Si no era lo que querias, corta con Ctrl+C y usa --version v$INSTALADA"
+    sleep 5
 fi
 
 # --- 2. Go ------------------------------------------------------------------
@@ -249,20 +322,44 @@ if ! go mod tidy >/dev/null 2>&1; then
     warn "go mod tidy dio avisos, se intenta compilar igualmente"
 fi
 
-if ! go build -o "$TRABAJO/wings.nuevo" . ; then
-    err "La compilacion fallo. NO se ha tocado tu wings actual."
-    exit 1
+# El numero de version se graba en el binario, igual que hace el proyecto
+# oficial. Si no se hace, wings responde "vdevelop" y entonces ni el panel sabe
+# que version corre en el nodo ni este script puede detectarla la proxima vez.
+# (Ese es justo el motivo de que un wings compilado a mano no se pueda
+# identificar.)
+NUMERO_VERSION="${VERSION_WINGS#v}"
+
+if ! go build -ldflags "-X github.com/pterodactyl/wings/system.Version=$NUMERO_VERSION" -o "$TRABAJO/wings.nuevo" . ; then
+    warn "La compilacion con el numero de version fallo, se reintenta sin el"
+
+    if ! go build -o "$TRABAJO/wings.nuevo" . ; then
+        err "La compilacion fallo. NO se ha tocado tu wings actual."
+        exit 1
+    fi
 fi
 
 ok "Compilado correctamente"
 
-# Comprobacion de que el binario nuevo al menos arranca y responde.
-if ! "$TRABAJO/wings.nuevo" --version >/dev/null 2>&1; then
-    err "El binario compilado no responde. NO se ha tocado tu wings actual."
+# --- Comprobacion de que el binario nuevo arranca y responde ---------------
+#
+# Aqui se usa "version" (subcomando). Con "--version" wings responde
+# "unknown flag" y sale con error, que era lo que hacia fallar esta
+# comprobacion aunque la compilacion hubiera ido perfecta.
+
+SALIDA_VERSION="$("$TRABAJO/wings.nuevo" version 2>&1 | head -1)"
+
+if printf '%s' "$SALIDA_VERSION" | grep -qi 'wings'; then
+    ok "El binario nuevo responde: $SALIDA_VERSION"
+elif "$TRABAJO/wings.nuevo" --help >/dev/null 2>&1; then
+    # Alguna version futura podria cambiar el texto de "version"; con que
+    # responda a --help ya sabemos que el binario es valido.
+    ok "El binario nuevo responde"
+else
+    err "El binario compilado no arranca. NO se ha tocado tu wings actual."
+    printf '        Salida obtenida: %s\n' "${SALIDA_VERSION:-(ninguna)}"
+    printf '        Puedes probarlo tu mismo:  %s/wings.nuevo version\n\n' "$TRABAJO"
     exit 1
 fi
-
-ok "El binario nuevo responde"
 
 # --- 6. Instalar ------------------------------------------------------------
 

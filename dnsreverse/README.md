@@ -132,6 +132,37 @@ guarda una copia del wings actual, asi que volver atras es un comando.
 Tarda unos minutos (compila Go). No toca ningun servidor ni ningun archivo de
 tus clientes.
 
+#### Si te dice que no puede averiguar la version
+
+```
+[!!] No se ha podido averiguar que version de wings tienes.
+```
+
+Es lo normal **si ya tenias puesto el complemento antiguo**: ese wings esta
+compilado a mano y responde `wings vdevelop`, sin numero. El script se para a
+proposito en vez de coger la ultima publicada, porque eso te cambiaria wings de
+version sin avisar y una wings mas nueva que tu panel puede dejar de hablarse
+con el.
+
+Mira que version del panel tienes (abajo a la derecha en el area de
+administracion) y usa la misma serie:
+
+| Panel | wings |
+|---|---|
+| 1.11.x | `v1.11.13` |
+| 1.12.x | `v1.12.3` |
+| 1.13.x | `v1.13.2` |
+
+```bash
+sudo bash /opt/pterodactyl-log-extencion/dnsreverse/wings/install-wings.sh --version v1.11.13
+```
+
+A partir de esta instalacion el problema no se repite: el script **graba el
+numero de version en el binario**, asi que la proxima vez lo detecta solo (y el
+panel tambien deja de mostrar "develop" en la ficha del nodo).
+
+Si sabes lo que haces y quieres la ultima publicada, `--latest`.
+
 ### 3. Comprobar
 
 En el panel: **Admin -> DNS Reverse -> Nodos**. Cada nodo tiene que salir como

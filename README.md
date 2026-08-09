@@ -41,6 +41,17 @@ sudo bash /opt/pterodactyl-log-extencion/dnsreverse/wings/install-wings.sh
 Si tu panel no esta en `/var/www/pterodactyl`, pasa la ruta al final:
 `sudo bash .../dnsreverse/install.sh /ruta/de/tu/panel`
 
+> **Si el nodo dice "No se ha podido averiguar que version de wings tienes"**,
+> es porque ese wings ya esta compilado a mano (te pasara si ya tenias el
+> complemento antiguo). Indica la version que corresponde a tu panel, que se
+> ve abajo a la derecha en el area de administracion:
+> ```bash
+> # panel 1.11.x -> v1.11.13   |   1.12.x -> v1.12.3   |   1.13.x -> v1.13.2
+> sudo bash .../dnsreverse/wings/install-wings.sh --version v1.11.13
+> ```
+> Solo hace falta la primera vez: a partir de ahi el numero queda grabado en el
+> binario y se detecta solo.
+
 > Si ya tenias la version antigua, **no se borra nada**: los dominios que tus
 > clientes ya tienen creados aparecen solos en cuanto termina la instalacion.
 
