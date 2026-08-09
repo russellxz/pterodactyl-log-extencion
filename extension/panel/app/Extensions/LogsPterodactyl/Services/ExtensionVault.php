@@ -36,6 +36,22 @@ class ExtensionVault
      */
     private const IGNORAR = ['.', '..', self::MIA];
 
+    /**
+     * app/Extensions NO es una carpeta de addons: la trae el propio
+     * Pterodactyl y dentro estan SUS clases (Backups, Themes, Illuminate...).
+     * Sin esta lista, la pantalla se llenaba de carpetas del panel como si
+     * fueran extensiones instaladas.
+     *
+     * Ademas de la lista, se pide una senal positiva (ver pareceExtension):
+     * ninguna de estas carpetas del panel registra un ServiceProvider, y una
+     * extension de verdad si. Asi tambien quedan fuera las que anada
+     * Pterodactyl en el futuro y no esten en esta lista.
+     */
+    private const NUCLEO_PTERODACTYL = [
+        'Backups', 'Facades', 'Filesystem', 'Illuminate',
+        'Laravel', 'Lcobucci', 'League', 'Spatie', 'Themes',
+    ];
+
     public function __construct(private Settings $settings)
     {
     }
@@ -66,6 +82,18 @@ class ExtensionVault
         }
 
         foreach ($this->scanBlueprint() as $clave => $datos) {
+            $encontradas[$clave] = $datos;
+        }
+
+        foreach ($this->scanOtherLayouts() as $clave => $datos) {
+            if (isset($encontradas[$clave])) {
+                $encontradas[$clave]['paths'] = array_values(array_unique(
+                    array_merge($encontradas[$clave]['paths'], $datos['paths'])
+                ));
+
+                continue;
+            }
+
             $encontradas[$clave] = $datos;
         }
 
@@ -109,6 +137,14 @@ class ExtensionVault
                 continue;
             }
 
+            if (in_array($nombre, self::NUCLEO_PTERODACTYL, true)) {
+                continue;
+            }
+
+            if (!$this->pareceExtension($base . '/' . $nombre, $nombre)) {
+                continue;
+            }
+
             $salida[strtolower($nombre)] = [
                 'key' => strtolower($nombre),
                 'name' => $nombre,
@@ -119,6 +155,40 @@ class ExtensionVault
         }
 
         return $salida;
+    }
+
+    /**
+     * ¿Esta carpeta es de verdad una extension de alguien?
+     *
+     * Se pide una senal clara, no que este dentro de app/Extensions: ahi el
+     * propio Pterodactyl guarda sus clases. Una extension de verdad hace al
+     * menos una de estas tres cosas.
+     */
+    private function pareceExtension(string $ruta, string $nombre): bool
+    {
+        // 1) Registra un proveedor de servicios (es lo que hace toda extension
+        //    que quiera engancharse al panel).
+        foreach ([$ruta . '/*ServiceProvider.php', $ruta . '/*/*ServiceProvider.php'] as $patron) {
+            if ((array) glob($patron) !== []) {
+                return true;
+            }
+        }
+
+        // 2) O aparece en config/app.php, que es donde se registran.
+        foreach ($this->providerLines() as $linea) {
+            if (stripos($linea, '\\' . $nombre . '\\') !== false) {
+                return true;
+            }
+        }
+
+        // 3) O se instala como un paquete propio.
+        foreach (['composer.json', 'extension.json', 'install.sh', 'plugin.json'] as $marca) {
+            if (is_file($ruta . '/' . $marca)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -197,6 +267,61 @@ class ExtensionVault
                 'paths' => $rutas,
                 'detail' => 'Extension instalada con Blueprint.',
             ];
+        }
+
+        return $salida;
+    }
+
+    /**
+     * Otros sitios donde los addons de Pterodactyl suelen dejar sus cosas.
+     *
+     * No todos usan app/Extensions: hay muchos que cuelgan sus controladores y
+     * sus vistas de las carpetas del panel, en subcarpetas propias.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function scanOtherLayouts(): array
+    {
+        $salida = [];
+
+        $bases = [
+            'app/Http/Controllers/Admin/Extensions' => 'Controladores propios dentro del panel.',
+            'resources/views/admin/extensions' => 'Vistas propias dentro del panel.',
+            'app/BlueprintFramework/Extensions' => 'Extension de Blueprint.',
+        ];
+
+        foreach ($bases as $relativa => $detalle) {
+            $base = base_path($relativa);
+
+            if (!is_dir($base)) {
+                continue;
+            }
+
+            foreach ((array) @scandir($base) as $nombre) {
+                if (in_array($nombre, ['.', '..'], true) || !is_dir($base . '/' . $nombre)) {
+                    continue;
+                }
+
+                if (strcasecmp($nombre, self::MIA) === 0) {
+                    continue;
+                }
+
+                $clave = strtolower($nombre);
+
+                if (isset($salida[$clave])) {
+                    $salida[$clave]['paths'][] = $relativa . '/' . $nombre;
+
+                    continue;
+                }
+
+                $salida[$clave] = [
+                    'key' => $clave,
+                    'name' => $nombre,
+                    'type' => 'addon del panel',
+                    'paths' => [$relativa . '/' . $nombre],
+                    'detail' => $detalle,
+                ];
+            }
         }
 
         return $salida;

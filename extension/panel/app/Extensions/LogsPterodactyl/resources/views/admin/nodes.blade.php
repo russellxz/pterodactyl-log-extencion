@@ -122,8 +122,17 @@
                                     <input type="checkbox" name="auto_fix" value="1"
                                            @if($nodo['configurado'] && $a->auto_fix) checked @endif>
                                     <span>
-                                        Arreglarlo solo: cuando se detecte que el nodo rechaza una instalacion
-                                        por tener el contenedor anterior colgado, entrar y eliminarlo
+                                        <strong>Limpiar el nodo automaticamente.</strong>
+                                        Cada vez que se pare una instalacion &mdash;porque paso el tiempo
+                                        configurado, porque le dio el cliente al boton, o porque se detecte
+                                        que el nodo esta rechazando instalaciones&mdash; entrar por SSH y
+                                        eliminar el contenedor de instalacion que se quedo colgado.
+                                        <br>
+                                        <span class="logspterodactyl-muted logspterodactyl-small">
+                                            Es lo que hace que el cliente pueda reinstalar y le funcione a la
+                                            primera. Sin esto el panel queda bien, pero wings sigue con su
+                                            bloqueo puesto.
+                                        </span>
                                     </span>
                                 </label>
                             </div>
