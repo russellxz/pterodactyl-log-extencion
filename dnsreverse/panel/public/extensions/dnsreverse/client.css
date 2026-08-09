@@ -529,7 +529,31 @@ select.dnsrev-input {
     color: #86efac;
 }
 
+/* --- Modo nativo (compilado con yarn) ----------------------------------- */
+/*
+ * En modo nativo no hay hoja flotante: la pantalla es una pagina mas del
+ * panel. Se reutiliza todo lo de arriba y solo se le pone el marco que antes
+ * ponia .dnsrev-sheet.
+ */
+
+.dnsrev-nativo {
+    padding: 20px 22px 26px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 14px;
+    background: #131725;
+    color: #e2e8f0;
+}
+
+.dnsrev-nativo .dnsrev-section:last-child {
+    margin-bottom: 0;
+}
+
 @media (max-width: 640px) {
+    .dnsrev-nativo {
+        padding: 16px 14px 20px;
+        border-radius: 10px;
+    }
+
     .dnsrev-overlay {
         padding: 0;
     }

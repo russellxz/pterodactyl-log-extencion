@@ -171,6 +171,33 @@ printf '\n%s  Instalacion terminada%s\n' "$G$B" "$N"
 printf '  ---------------------------------------------------------------\n'
 printf '  Panel de la extension:  %s/admin/dnsreverse\n' "${PANEL_URL:-https://TU-PANEL}"
 printf '\n'
+
+# Si el cliente usaba el modo nativo (boton compilado dentro del panel), una
+# actualizacion del panel se lleva por delante tanto routes.ts como los
+# archivos compilados. Aqui se detecta y se avisa, porque si no el cliente se
+# queda sin ver la pantalla y no sabe por que.
+MODO_NATIVO=0
+
+if [ -f "$PANEL/resources/scripts/components/server/dnsreverse/DnsReverseContainer.tsx" ] \
+   || grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null; then
+    MODO_NATIVO=1
+fi
+
+if [ "$MODO_NATIVO" -eq 0 ] && php "$PANEL/artisan" dnsreverse:ui 2>/dev/null | grep -q 'nativo'; then
+    printf '  %sAVISO:%s la extension esta en modo nativo pero el panel ya no lo tiene\n' "$Y$B" "$N"
+    printf '  puesto (lo habra borrado una actualizacion del panel). Tus clientes NO\n'
+    printf '  veran la pantalla hasta que hagas una de estas dos cosas:\n'
+    printf '\n'
+    printf '    a) volver a compilarlo:   sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
+    printf '    b) usar el modo inyectado, que no necesita compilar:\n'
+    printf '                              cd %s && php artisan dnsreverse:ui inject\n' "$PANEL"
+    printf '\n'
+elif [ "$MODO_NATIVO" -eq 1 ]; then
+    printf '  Modo nativo detectado: recuerda recompilar el panel cuando lo actualices\n'
+    printf '      sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
+    printf '\n'
+fi
+
 printf '  Siguientes pasos:\n'
 printf '    1. Dominios -> Anadir dominio, con su token de Cloudflare\n'
 printf '       (cada dominio lleva SU token y SU certificado: puedes mezclar\n'

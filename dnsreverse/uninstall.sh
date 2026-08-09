@@ -151,7 +151,37 @@ else
     fi
 fi
 
-# --- 3. Borrar los archivos -------------------------------------------------
+# --- 3. Deshacer el modo nativo (si estaba) ---------------------------------
+#
+# Si el boton se habia compilado dentro del panel, hay que quitar el import de
+# routes.ts ANTES de borrar los archivos. Si no, el siguiente "yarn build" del
+# panel fallaria buscando un componente que ya no existe.
+
+RECOMPILAR=0
+
+if grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null \
+   || grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.tsx" 2>/dev/null; then
+
+    RECOMPILAR=1
+
+    if [ -f "$PANEL/app/Extensions/DnsReverse/tools/patch-frontend.php" ] \
+       && php "$PANEL/app/Extensions/DnsReverse/tools/patch-frontend.php" "$PANEL" --remove >/dev/null 2>&1; then
+        ok "Modo nativo deshecho en routes.ts"
+    else
+        # Respaldo: la copia que dejo el parche es el original exacto.
+        for archivo in "$PANEL/resources/scripts/routers/routes.ts" "$PANEL/resources/scripts/routers/routes.tsx"; do
+            if [ -f "$archivo.dnsreverse-original" ]; then
+                cp "$archivo.dnsreverse-original" "$archivo" && ok "routes.ts restaurado desde la copia original"
+            fi
+        done
+    fi
+
+    rm -rf "$PANEL/resources/scripts/components/server/dnsreverse"
+    rm -f "$PANEL/resources/scripts/routers/routes.ts.dnsreverse-original" \
+          "$PANEL/resources/scripts/routers/routes.tsx.dnsreverse-original"
+fi
+
+# --- 4. Borrar los archivos -------------------------------------------------
 
 rm -rf "$PANEL/app/Extensions/DnsReverse" && ok "Codigo borrado" || err "No se pudo borrar app/Extensions/DnsReverse"
 rm -rf "$PANEL/public/extensions/dnsreverse" && ok "Recursos publicos borrados" || err "No se pudo borrar public/extensions/dnsreverse"
@@ -163,7 +193,7 @@ rmdir "$PANEL/public/extensions" 2>/dev/null || true
 
 rm -f "$PANEL/config/app.php.dnsreverse-backup" "$PANEL/config/app.php.dnsreverse-antes-de-desinstalar"
 
-# --- 4. Limpiar caches ------------------------------------------------------
+# --- 5. Limpiar caches ------------------------------------------------------
 
 rm -f "$PANEL"/bootstrap/cache/config.php "$PANEL"/bootstrap/cache/services.php "$PANEL"/bootstrap/cache/packages.php 2>/dev/null
 
@@ -188,6 +218,15 @@ elif [ "$BORRAR_CONFIG" -eq 1 ]; then
 else
     printf '  No se ha borrado ningun dato. Para volver a tenerlo todo:\n'
     printf '      sudo bash %s/install.sh %s\n' "$AQUI" "$PANEL"
+fi
+
+if [ "$RECOMPILAR" -eq 1 ]; then
+    printf '\n'
+    printf '  %sTenias el modo nativo (compilado).%s Se ha quitado de routes.ts, pero\n' "$Y$B" "$N"
+    printf '  el boton seguira saliendo hasta que recompiles el panel:\n'
+    printf '      cd %s && yarn build:production\n' "$PANEL"
+    printf '  Si no lo recompilas no pasa nada grave: el boton dara una pantalla\n'
+    printf '  vacia porque la extension ya no responde.\n'
 fi
 
 printf '\n'
