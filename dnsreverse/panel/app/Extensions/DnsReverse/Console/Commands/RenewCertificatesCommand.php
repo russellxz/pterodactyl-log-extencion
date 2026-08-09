@@ -5,6 +5,7 @@ namespace Pterodactyl\Extensions\DnsReverse\Console\Commands;
 use Illuminate\Console\Command;
 use Pterodactyl\Extensions\DnsReverse\Models\DnsEvent;
 use Pterodactyl\Extensions\DnsReverse\Models\ProxyRecord;
+use Pterodactyl\Extensions\DnsReverse\Services\ProxyManager;
 use Pterodactyl\Extensions\DnsReverse\Services\WingsClient;
 use Pterodactyl\Extensions\DnsReverse\Support\Settings;
 use Pterodactyl\Models\Node;
@@ -27,12 +28,34 @@ class RenewCertificatesCommand extends Command
 
     protected $description = 'Renueva los certificados de Let\'s Encrypt que caducan pronto';
 
-    public function handle(Settings $settings): int
+    public function handle(Settings $settings, ProxyManager $proxies): int
     {
         if (!$settings->bool('letsencrypt_auto_renew') && !$this->option('force')) {
             $this->line('La renovacion automatica esta apagada en la configuracion. Usa --force para forzarla.');
 
             return self::SUCCESS;
+        }
+
+        // --- Primero, los que se quedaron sin certificado al crearse -------
+        //
+        // Casi siempre es porque el DNS todavia no se veia desde fuera cuando
+        // se pidio. Ahora ya habra pasado tiempo de sobra.
+        $pendientes = $proxies->certificadosPendientes();
+
+        if ($pendientes->isNotEmpty()) {
+            $this->line('');
+            $this->line('  ' . $pendientes->count() . ' dominio(s) con el certificado pendiente:');
+
+            foreach ($pendientes as $registro) {
+                $resultado = $proxies->reintentarCertificado($registro);
+
+                $this->line(sprintf('  <fg=%s>[%s]</> %s: %s',
+                    $resultado['ok'] ? 'green' : 'yellow',
+                    $resultado['ok'] ? 'ok' : '..',
+                    $registro->domain,
+                    $resultado['message']
+                ));
+            }
         }
 
         $dias = $this->option('days') !== null

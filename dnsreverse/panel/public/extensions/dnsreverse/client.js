@@ -972,13 +972,21 @@
             if (codigo >= 200 && codigo < 300 && datos && datos.ok) {
                 var creado = (datos.record && datos.record.domain) ? datos.record.domain : 'Tu dominio';
 
-                estado.aviso = {
-                    tipo: 'ok',
-                    texto: creado + ' ya esta configurado. Si acabas de crear el registro DNS, puede tardar '
-                        + 'unos minutos en verse desde todos los sitios.',
-                };
+                // Puede haberse creado bien pero con el certificado pendiente:
+                // el dominio funciona por http y el candado llega despues.
+                if (datos.warning) {
+                    estado.aviso = { tipo: 'error', texto: creado + ': ' + datos.warning };
+                    mostrarResultado(false, 'Creado, pero falta el candado.');
+                } else {
+                    estado.aviso = {
+                        tipo: 'ok',
+                        texto: creado + ' ya esta configurado. Si acabas de crear el registro DNS, puede tardar '
+                            + 'unos minutos en verse desde todos los sitios.',
+                    };
 
-                mostrarResultado(true, 'Listo, ya esta creado.');
+                    mostrarResultado(true, 'Listo, ya esta creado.');
+                }
+
                 window.setTimeout(cargar, 900);
                 return;
             }

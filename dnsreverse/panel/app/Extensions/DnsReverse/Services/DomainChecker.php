@@ -157,6 +157,89 @@ class DomainChecker
     }
 
     /**
+     * Espera a que un nombre se vea de verdad en internet.
+     *
+     * Esto existe por un motivo muy concreto. Cloudflare acepta el registro al
+     * instante, pero tarda unos segundos en servirlo desde todos sus
+     * servidores. Si en ese hueco se le pide el certificado a Let's Encrypt,
+     * su comprobacion devuelve NXDOMAIN y el certificado no se emite, aunque
+     * el registro este perfectamente creado.
+     *
+     * Se pregunta a los resolutores publicos de Cloudflare y de Google por
+     * HTTPS (DoH), que es lo mas parecido a lo que va a ver Let's Encrypt, y
+     * ademas al resolutor del propio servidor.
+     *
+     * @return array{ok: bool, segundos: int, detalle: string}
+     */
+    public static function esperarResolucion(string $dominio, int $maximoSegundos = 90): array
+    {
+        $inicio = time();
+        $espera = 2;
+
+        while (true) {
+            $direcciones = self::resolverEnPublicos($dominio);
+
+            if ($direcciones !== []) {
+                return [
+                    'ok' => true,
+                    'segundos' => time() - $inicio,
+                    'detalle' => 'Resuelve a ' . implode(', ', $direcciones) . '.',
+                ];
+            }
+
+            if ((time() - $inicio) >= $maximoSegundos) {
+                return [
+                    'ok' => false,
+                    'segundos' => time() - $inicio,
+                    'detalle' => 'Despues de ' . (time() - $inicio) . ' segundos el nombre sigue sin resolver.',
+                ];
+            }
+
+            sleep($espera);
+            $espera = min($espera + 2, 8);
+        }
+    }
+
+    /**
+     * Pregunta a 1.1.1.1 y a 8.8.8.8 por HTTPS, y de postre al resolutor del
+     * sistema. Con que uno lo vea, vale.
+     *
+     * @return array<int, string>
+     */
+    private static function resolverEnPublicos(string $dominio): array
+    {
+        foreach (['https://cloudflare-dns.com/dns-query', 'https://dns.google/resolve'] as $servicio) {
+            try {
+                $respuesta = Http::withHeaders(['Accept' => 'application/dns-json'])
+                    ->timeout(6)
+                    ->connectTimeout(4)
+                    ->get($servicio, ['name' => $dominio, 'type' => 'A']);
+
+                if (!$respuesta->successful()) {
+                    continue;
+                }
+
+                $direcciones = [];
+
+                foreach ((array) $respuesta->json('Answer', []) as $entrada) {
+                    // Tipo 1 = A. Se ignoran los CNAME intermedios.
+                    if ((int) ($entrada['type'] ?? 0) === 1 && !empty($entrada['data'])) {
+                        $direcciones[] = (string) $entrada['data'];
+                    }
+                }
+
+                if ($direcciones !== []) {
+                    return $direcciones;
+                }
+            } catch (\Throwable) {
+                // Ese servicio no contesta: se prueba el siguiente.
+            }
+        }
+
+        return self::resolver($dominio);
+    }
+
+    /**
      * @return array<int, string>
      */
     private static function resolver(string $dominio): array

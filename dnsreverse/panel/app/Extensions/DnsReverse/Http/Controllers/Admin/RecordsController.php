@@ -84,6 +84,14 @@ class RecordsController extends Controller
     }
 
     /**
+     * Reintenta el certificado de un dominio que se quedo sin el.
+     */
+    public function certificate(ProxyRecord $record): JsonResponse
+    {
+        return response()->json($this->proxies->reintentarCertificado($record));
+    }
+
+    /**
      * Vuelve a mandar la configuracion de este DNS al nodo. Util cuando se
      * reinstala un nodo o cuando la configuracion de nginx se perdio.
      */

@@ -91,6 +91,12 @@
                                     @if($registro->last_error)
                                         <div class="dnsreverse-inline-error">{{ $registro->last_error }}</div>
                                     @endif
+                                    @if($registro->ssl_mode === 'letsencrypt' && !$registro->ssl_enabled)
+                                        <button type="button" class="btn btn-xs btn-warning" style="margin-top:4px;"
+                                                onclick="dnsreverseReintentarCert({{ $registro->id }}, '{{ $registro->domain }}', this)">
+                                            @dnsicon('lock', 12) Reintentar certificado
+                                        </button>
+                                    @endif
                                 </td>
                                 <td class="small">{{ $registro->typeLabel() }}</td>
                                 <td>
@@ -170,6 +176,27 @@
 
 @section('dnsreverse-scripts')
 <script>
+function dnsreverseReintentarCert(id, dominio, boton) {
+    boton.disabled = true;
+    boton.textContent = 'Pidiendo el certificado...';
+
+    fetch(@json(url('admin/dnsreverse/records')) + '/' + id + '/certificate', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-TOKEN': @json(csrf_token()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        window.alert(dominio + ': ' + d.message);
+        if (d.ok) { window.location.reload(); }
+        boton.disabled = false;
+        boton.textContent = 'Reintentar certificado';
+    }).catch(function (e) {
+        window.alert('No se pudo: ' + e);
+        boton.disabled = false;
+        boton.textContent = 'Reintentar certificado';
+    });
+}
+
 function dnsreverseDiagnostico(id, dominio) {
     var fila = document.getElementById('dnsreverseDiagFila');
     var cuerpo = document.getElementById('dnsreverseDiagCuerpo');

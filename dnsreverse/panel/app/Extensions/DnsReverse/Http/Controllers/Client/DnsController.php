@@ -110,7 +110,14 @@ class DnsController extends Controller
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
 
-        return response()->json(['ok' => true, 'record' => $registro->toClientArray()]);
+        return response()->json([
+            'ok' => true,
+            'record' => $registro->toClientArray(),
+            // Cuando el dominio se crea pero el certificado queda pendiente,
+            // el cliente tiene que enterarse: su pagina funciona, pero de
+            // momento sin candado.
+            'warning' => $registro->last_error ? (string) $registro->last_error : null,
+        ]);
     }
 
     public function destroy(Request $request, string $server, int $record): JsonResponse
