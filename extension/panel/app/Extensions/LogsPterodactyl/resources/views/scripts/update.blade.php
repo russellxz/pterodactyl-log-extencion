@@ -23,6 +23,7 @@ DB_NAME="{!! $database !!}"
 DB_CREDENTIALS="{!! $credentials !!}"
 REGISTER_TOOL="{!! $registerTool !!}"
 VERSION_TOOL="{!! $versionTool !!}"
+REPAIR_TOOL="{!! $repairTool !!}"
 WEB_USER="{!! $webUser !!}"
 @if($themePath)
 THEME_PATH="{!! $themePath !!}"
@@ -91,6 +92,46 @@ step() {
     fi
 
     fail "El paso \"$CURRENT\" devolvio un error. Revisa el registro para ver el detalle."
+}
+
+# Comprueba que el panel ARRANCA de verdad.
+#
+# Es la red de seguridad contra las otras extensiones que tengas instaladas.
+# Al descomprimir el paquete oficial se reemplaza composer.json y se vuelven a
+# instalar solo las dependencias del panel, asi que una extension puede
+# quedarse sin sus paquetes mientras su linea sigue en config/app.php. Cuando
+# eso pasa Laravel no arranca, y sin Laravel no funciona NINGUN comando de
+# artisan: ni migrate, ni optimize, ni siquiera "artisan up" para sacar el
+# panel del mantenimiento.
+#
+# Asi que antes de seguir se prueba, y si no arranca se comentan los
+# proveedores rotos y se vuelve a probar.
+ensure_boots() {
+    local etapa="$1"
+    CURRENT="Comprobando que el panel arranca ($etapa)"
+    log ""
+    log "==> $CURRENT"
+    write_status "running" "$CURRENT" ""
+
+    if (cd "$PANEL" && php artisan --version) >> "$LOG" 2>&1; then
+        add_step "$CURRENT" "done"
+        write_status "running" "$CURRENT" ""
+        return 0
+    fi
+
+    log "El panel NO arranca. Suele ser una extension de otro que se quedo a medias."
+    log "Se van a desactivar los proveedores que apunten a clases que ya no existen."
+
+    if php "$REPAIR_TOOL" "$PANEL" >> "$LOG" 2>&1; then
+        if (cd "$PANEL" && php artisan --version) >> "$LOG" 2>&1; then
+            log "Arreglado: el panel vuelve a arrancar."
+            add_step "$CURRENT" "warning"
+            write_status "running" "$CURRENT" ""
+            return 0
+        fi
+    fi
+
+    fail "El panel no arranca y no se ha podido arreglar solo. Mira el registro: normalmente es una extension de terceros. Puedes deshacerlo todo con: sudo bash $RUN_DIR/rollback.sh"
 }
 
 # Igual que step(), pero un fallo solo genera un aviso y no aborta.
@@ -166,6 +207,9 @@ else
     fail "composer no esta instalado y es imprescindible para actualizar."
 fi
 
+# Aqui es donde revienta si alguna extension se quedo sin sus archivos.
+ensure_boots "tras instalar dependencias"
+
 step "Limpiando cache de vistas y configuracion" \
     "cd '$PANEL' && php artisan view:clear && php artisan config:clear && php artisan route:clear || true"
 
@@ -218,6 +262,9 @@ fi
 
 soft_step "Volviendo a registrar la extension LogsPterodactyl" \
     "php '$REGISTER_TOOL' '$PANEL'"
+
+# El tema trae su propio config/app.php, asi que se vuelve a comprobar.
+ensure_boots "tras restaurar el tema" 
 
 soft_step "Aplicando las migraciones de la extension" \
     "cd '$PANEL' && php artisan migrate --force"

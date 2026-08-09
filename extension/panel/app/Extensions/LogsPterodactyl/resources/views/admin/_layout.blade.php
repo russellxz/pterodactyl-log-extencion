@@ -37,7 +37,6 @@
                         ['route' => 'admin.logspterodactyl.mails', 'label' => 'Correos', 'icon' => 'mail'],
                         ['route' => 'admin.logspterodactyl.compose', 'label' => 'Enviar correo', 'icon' => 'send'],
                         ['route' => 'admin.logspterodactyl.nodes', 'label' => 'Nodos', 'icon' => 'hard-drive'],
-                        ['route' => 'admin.logspterodactyl.extensions', 'label' => 'Otras extensiones', 'icon' => 'database'],
                         ['route' => 'admin.logspterodactyl.updater', 'label' => 'Actualizar panel', 'icon' => 'upload-cloud'],
                         ['route' => 'admin.logspterodactyl.events', 'label' => 'Registro', 'icon' => 'file-text'],
                         ['route' => 'admin.logspterodactyl.settings', 'label' => 'Configuracion', 'icon' => 'settings'],

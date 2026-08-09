@@ -8,15 +8,16 @@ los correos que salen (y los que no), el envio de correos a los clientes, el
 consumo real de cada servidor con nombre y correo de su dueno, y la
 actualizacion del panel con respaldo y vuelta atras.
 
-> **Novedades de la 1.3.1.** Se actualiza con `sudo bash update.sh`.
+> **Novedades de la 1.4.0.** Se actualiza con `sudo bash update.sh`.
 >
-> - **Limpieza del nodo al parar.** Ahora el contenedor colgado se elimina
->   cuando se para la instalacion (por tiempo, por el boton del cliente o por
->   el tuyo), no solo cuando ya ha fallado un reintento. Es lo que hace que el
->   cliente reinstale y le funcione a la primera.
-> - **"Otras extensiones" ya no lista carpetas del propio Pterodactyl**
->   (Backups, Themes, Illuminate, League...). Salian nueve como si fueran
->   addons tuyos.
+> - **Limpieza del nodo al parar.** El contenedor colgado se elimina cuando se
+>   para la instalacion (por tiempo, por el boton del cliente o por el tuyo),
+>   no solo cuando ya ha fallado un reintento. Es lo que hace que el cliente
+>   reinstale y le funcione a la primera.
+> - **La actualizacion del panel ya no se cae por otras extensiones.**
+>   Comprueba que el panel arranca en los dos puntos donde suele romperse y,
+>   si no arranca, desactiva las lineas rotas para poder terminar.
+> - Se ha quitado la pantalla de copias de extensiones.
 >
 > **De la 1.3.0:**
 >
@@ -45,8 +46,6 @@ actualizacion del panel con respaldo y vuelta atras.
 >   porque sigue ocupado con la anterior, el panel te lo dice con el comando
 >   exacto que hay que ejecutar, y al cliente se le explica que no es cosa
 >   suya en vez de mandarle a revisar un token que esta bien.
-> - **Copias de las otras extensiones** del panel, descargables, con
->   restauracion en un boton. Se hacen solas antes de actualizar el panel.
 > - El registro de instalaciones funciona aunque el corte automatico este
 >   apagado (antes el interruptor apagaba las dos cosas).
 >
@@ -194,7 +193,6 @@ Que hace exactamente:
 | `public/extensions/logspterodactyl/logos` | escribible | logo de los correos |
 | `storage` y `bootstrap/cache` | dueno del servidor web, `755` | receta oficial de Pterodactyl |
 | `/var/backups/logspterodactyl` | dueno del servidor web, `700` | respaldos antes de actualizar |
-| `/var/backups/logspterodactyl/extensiones` | dueno del servidor web, `700` | copias de las otras extensiones |
 
 Ademas comprueba de verdad, escribiendo como el usuario del servidor web, que
 cada carpeta es accesible, y avisa si falta el cron.
@@ -458,63 +456,47 @@ registro no deja un token de acceso a la vista.
 - Se manda **uno por uno**, asi ningun cliente ve la direccion de los demas.
 - Cada envio queda agrupado como campana: cuantos salieron y cuantos fallaron.
 
-### 6. Copias de las otras extensiones
-
-Pantalla **Otras extensiones**. Detecta lo que tengas instalado en el panel
-aparte de esta extension:
-
-- `app/Extensions/<Nombre>` (extensiones con codigo propio)
-- `app/Http/Controllers/Admin/Extensions/<nombre>` y
-  `resources/views/admin/extensions/<nombre>` (addons que cuelgan de las
-  carpetas del panel)
-- `public/extensions/<nombre>` (sus js, css e imagenes)
-- `.blueprint/extensions/<nombre>` (las instaladas con **Blueprint**, que es
-  como viene la mayoria de addons de pago)
-- y las **lineas de proveedor** de `config/app.php`
-
-> **Ojo con `app/Extensions`**: esa carpeta la trae el propio Pterodactyl y
-> dentro estan SUS clases (`Backups`, `Themes`, `Illuminate`, `League`...).
-> No son addons tuyos. Para no llenarte la lista de basura, solo se cuenta como
-> extension lo que da una senal clara de serlo: que registre un
-> `ServiceProvider`, que aparezca en `config/app.php`, o que traiga su propio
-> `composer.json`.
-
-Ese ultimo punto es el importante: actualizar Pterodactyl trae su propio
-`config/app.php` y **se lleva por delante esas lineas**. Las carpetas de la
-extension siguen ahi, pero el panel deja de cargarla y parece que ha
-desaparecido. Por eso se guardan aparte y se te enseñan para que las vuelvas a
-pegar.
-
-Con un boton se hace un **zip descargable** de las que marques. Dentro va cada
-archivo con la misma ruta que tenia en el panel, un `manifest.json` y un
-`LEEME.txt` con las instrucciones para restaurarlo a mano si algun dia no
-tienes el panel delante. Se salta `node_modules`, `vendor` y `.git`, que se
-reinstalan solos y pesan mas que todo lo demas junto.
-
-Despues de actualizar el panel, **Restaurar** vuelve a dejar cada archivo en su
-sitio. Las lineas de proveedor no se escriben solas a proposito: se te enseñan
-para que las pongas tu, porque meter codigo a ciegas en `config/app.php` es la
-mejor forma de dejar el panel en blanco.
-
-**La copia se hace sola** al lanzar una actualizacion del panel desde la
-extension, antes de tocar nada. Si aun asi prefieres hacerla a mano, hazla
-antes de darle a actualizar.
-
-Tambien puedes **quitar** una extension desde aqui. Siempre guarda una copia
-antes de borrar nada, y te dice que linea de `config/app.php` te queda por
-limpiar. Lo que esa extension hubiera cambiado dentro de archivos del propio
-panel no se puede deshacer desde aqui, y la pantalla lo avisa.
-
-> Necesita la extension `zip` de PHP, que Pterodactyl ya exige de serie. Si
-> faltara: `apt install php8.3-zip` (con tu version de PHP) y reinicia PHP-FPM.
-
-### 7. Actualizar el panel
+### 6. Actualizar el panel
 
 Comprueba la ultima version publicada de Pterodactyl y la instala **sin perder
 el tema Arix**: respaldo completo (archivos + base de datos), descarga y
 comprobacion del paquete oficial, `composer install`, migraciones,
 restauracion del tema desde su carpeta `arix/<version>`, recompilado de sus
 assets y salida del mantenimiento.
+
+#### Si tienes otras extensiones instaladas
+
+Aqui esta el problema que se lleva por delante mas actualizaciones. El paquete
+oficial reemplaza `composer.json` y `config/app.php`, asi que un addon de otro
+puede quedarse sin sus dependencias mientras su linea sigue registrada. Y
+cuando Laravel no arranca, **no arranca nada**: ni `migrate`, ni `optimize`, ni
+el `artisan up` que saca al panel del mantenimiento. Te quedas con el panel
+caido, en mitad de la actualizacion, y con un `Class ... not found` que no dice
+de quien es la culpa.
+
+Para eso, el actualizador **comprueba que el panel arranca de verdad** en los
+dos puntos donde se rompe:
+
+1. despues del `composer install`
+2. despues de restaurar el tema Arix (que trae su propio `config/app.php`)
+
+Si no arranca, mira uno a uno los proveedores registrados y **comenta los que
+apuntan a clases que ya no existen**. No los borra: quedan con `//` y una nota
+al lado, para que puedas volver a activarlos cuando reinstales ese addon. Con
+eso el panel vuelve a levantarse y la actualizacion termina.
+
+Si aun asi no arranca, se para y te deja el `rollback.sh` a mano, en vez de
+seguir adelante y dejarte el panel a medias.
+
+Tambien se puede lanzar suelto en cualquier momento:
+
+```bash
+cd /var/www/pterodactyl
+php app/Extensions/LogsPterodactyl/tools/repair-providers.php . --dry-run   # ver que pasa
+php app/Extensions/LogsPterodactyl/tools/repair-providers.php .            # arreglarlo
+```
+
+Hace copia de `config/app.php` antes de tocarlo.
 
 Mientras dura, la pantalla muestra el progreso paso a paso leyendolo de un
 archivo estatico que sirve el servidor web sin pasar por PHP, asi que **se
