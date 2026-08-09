@@ -131,7 +131,7 @@
     // --- Tarjeta ------------------------------------------------------------
 
     function build(data) {
-        return data.mode === 'stopped' ? buildStopped(data) : buildStuck(data);
+        return data.mode.indexOf('stopped') === 0 ? buildStopped(data) : buildStuck(data);
     }
 
     function shell(inner) {
@@ -164,10 +164,12 @@
             '      </p>' +
             '    </div>' +
             '  </div>' +
-            '  <p class="logspterodactyl-lead">' +
-            '    Antes de detenerla, revisa los datos que pusiste al crear el servidor.' +
-            '    Casi siempre la instalacion se queda atascada por uno de estos motivos:' +
-            '  </p>' + CHECKLIST +
+            (data.nodeIssue
+                ? NODE_NOTE
+                : '  <p class="logspterodactyl-lead">' +
+                  '    Antes de detenerla, revisa los datos que pusiste al crear el servidor.' +
+                  '    Casi siempre la instalacion se queda atascada por uno de estos motivos:' +
+                  '  </p>' + CHECKLIST) +
             '  <div class="logspterodactyl-actions">' +
             '    <button type="button" class="logspterodactyl-btn logspterodactyl-btn-danger">' +
             icon('stop', 16) + '<span>Parar la instalacion</span></button>' +
@@ -177,7 +179,7 @@
         );
 
         wrapper.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
-            dismiss(data.serverId, 'instalando');
+            dismiss(data.serverId, data.attemptId);
             remove();
         });
 
@@ -188,10 +190,48 @@
         return wrapper;
     }
 
+    // Cuando el problema esta en el nodo no se le pide al cliente que revise
+    // nada: sus datos pueden estar perfectos y lo unico que se conseguiria es
+    // que rompiera una configuracion que ya iba bien.
+    var NODE_NOTE =
+        '<p class="logspterodactyl-lead">' +
+        '<strong>Esta vez no es cosa tuya.</strong> El servidor no ha podido empezar a ' +
+        'instalarse por un problema en la maquina donde esta alojado, no por los datos ' +
+        'que pusiste. Nuestro equipo ya lo tiene localizado.' +
+        '</p>' +
+        '<p class="logspterodactyl-hint">No hace falta que cambies nada. Si en un rato ' +
+        'sigue igual, escribe al soporte y te lo miramos.</p>';
+
     // Tarjeta 2: la instalacion se detuvo. El servidor ya esta desbloqueado
     // (marcado como instalado) y con su puerto nuevo, asi que aqui solo se
     // explica que hacer: revisar los datos y volver a instalar.
     function buildStopped(data) {
+        if (data.nodeIssue) {
+            var aviso = shell(
+                '  <div class="logspterodactyl-head">' +
+                '    <span class="logspterodactyl-badge">' + icon('alert', 18) + '</span>' +
+                '    <div>' +
+                '      <h3 class="logspterodactyl-title">Instalacion detenida</h3>' +
+                '      <p class="logspterodactyl-subtitle">' + icon('unlock', 14) +
+                '        <span>Tu servidor ya esta desbloqueado y puedes entrar.</span>' +
+                '      </p>' +
+                '    </div>' +
+                '  </div>' +
+                (data.address
+                    ? '  <p class="logspterodactyl-lead">Tu servidor esta ahora en <strong>' +
+                      escapeHtml(data.address) + '</strong>.</p>'
+                    : '') +
+                NODE_NOTE
+            );
+
+            aviso.querySelector('.logspterodactyl-dismiss').addEventListener('click', function () {
+                dismiss(data.serverId, data.stoppedId);
+                remove();
+            });
+
+            return aviso;
+        }
+
         var wrapper = shell(
             '  <div class="logspterodactyl-head">' +
             '    <span class="logspterodactyl-badge logspterodactyl-badge-ok">' + icon('check', 18) + '</span>' +
@@ -394,12 +434,21 @@
             if (payload.installing) {
                 state.wasInstalling = true;
 
-                if (!payload.can_cancel || isDismissed(server, 'instalando')) {
+                // El descarte va atado al intento concreto: si el cliente
+                // cierra el aviso y luego vuelve a instalar, el aviso de la
+                // instalacion nueva tiene que salir igualmente.
+                if (!payload.can_cancel || isDismissed(server, 'i' + (payload.attempt_id || 0))) {
                     remove();
                     return;
                 }
 
-                show({ serverId: server, minutes: payload.minutes, mode: 'stuck' });
+                show({
+                    serverId: server,
+                    attemptId: 'i' + (payload.attempt_id || 0),
+                    minutes: payload.minutes,
+                    nodeIssue: !!payload.node_issue,
+                    mode: payload.node_issue ? 'stuck-node' : 'stuck',
+                });
                 return;
             }
 
@@ -423,7 +472,8 @@
                 show({
                     serverId: server,
                     stoppedId: payload.stopped_id,
-                    mode: 'stopped',
+                    mode: payload.node_issue ? 'stopped-node' : 'stopped',
+                    nodeIssue: !!payload.node_issue,
                     address: payload.address,
                 });
                 return;

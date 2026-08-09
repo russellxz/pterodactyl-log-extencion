@@ -46,7 +46,7 @@ class DoctorCommand extends Command
         // 2b. Columnas que anaden las migraciones posteriores. Si faltan, la
         //     base de datos se quedo a medias en alguna actualizacion.
         if (Schema::hasTable('logspterodactyl_install_events')) {
-            foreach (['attempt', 'previous_id', 'unblock_until', 'unblocked_times'] as $columna) {
+            foreach (['attempt', 'previous_id', 'unblock_until', 'unblocked_times', 'diagnosis'] as $columna) {
                 $problems += $this->check(
                     Schema::hasColumn('logspterodactyl_install_events', $columna),
                     'Columna ' . $columna . ' del historial de instalaciones',

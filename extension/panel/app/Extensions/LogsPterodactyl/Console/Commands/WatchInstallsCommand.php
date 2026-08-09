@@ -25,19 +25,18 @@ class WatchInstallsCommand extends Command
     {
         $enabled = $settings->bool('watchdog_enabled') || $this->option('force');
 
-        if (!$enabled) {
-            $this->line('El vigilante de instalaciones esta desactivado en la configuracion.');
-
-            return self::SUCCESS;
-        }
-
         $minutes = $settings->int('watchdog_minutes', 1, 1440);
         $mode = (string) $settings->get('watchdog_action');
         $notify = $settings->bool('watchdog_notify_owner');
         $dry = (bool) $this->option('dry-run');
 
-        // Toda instalacion en curso queda registrada en el historial, aunque
-        // luego termine bien: asi se puede ver despues cuanto tardo cada una.
+        // El registro se lleva SIEMPRE, este o no encendido el corte
+        // automatico: son dos cosas distintas. Antes el interruptor apagaba
+        // tambien el historial, asi que con el corte desactivado la extension
+        // no se enteraba de ninguna instalacion ni de ninguna reinstalacion.
+        //
+        // Toda instalacion en curso queda registrada aunque luego termine
+        // bien: asi se puede ver despues cuanto tardo cada una.
         foreach ($guard->installing() as $server) {
             $guard->track($server);
         }
@@ -59,6 +58,14 @@ class WatchInstallsCommand extends Command
             if ($desbloqueados > 0) {
                 $this->line(sprintf('%d servidor(es) se habian vuelto a bloquear solos y se han desbloqueado.', $desbloqueados));
             }
+        }
+
+        // A partir de aqui empieza el corte automatico, que si depende del
+        // interruptor. El registro de arriba ya esta hecho.
+        if (!$enabled) {
+            $this->line('Registro actualizado. El corte automatico esta desactivado en la configuracion.');
+
+            return self::SUCCESS;
         }
 
         $stuck = $guard->stuck($minutes);

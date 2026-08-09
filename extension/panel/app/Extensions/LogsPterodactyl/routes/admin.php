@@ -52,6 +52,14 @@ Route::get('/resources/live', [Admin\ResourcesController::class, 'live'])->name(
 Route::get('/resources/top', [Admin\ResourcesController::class, 'top'])->name('resources.top');
 
 // --- Actualizacion del panel ---
+// Las otras extensiones del panel: copias, descarga y restauracion.
+Route::get('/extensions', [Admin\ExtensionsController::class, 'index'])->name('extensions');
+Route::post('/extensions/backup', [Admin\ExtensionsController::class, 'backup'])->name('extensions.backup');
+Route::get('/extensions/{file}/download', [Admin\ExtensionsController::class, 'download'])->name('extensions.download');
+Route::post('/extensions/{file}/restore', [Admin\ExtensionsController::class, 'restore'])->name('extensions.restore');
+Route::post('/extensions/{file}/delete', [Admin\ExtensionsController::class, 'destroy'])->name('extensions.delete');
+Route::post('/extensions/{key}/remove', [Admin\ExtensionsController::class, 'remove'])->name('extensions.remove');
+
 Route::get('/updater', [Admin\UpdaterController::class, 'index'])->name('updater');
 Route::post('/updater/check', [Admin\UpdaterController::class, 'check'])->name('updater.check');
 Route::post('/updater/start', [Admin\UpdaterController::class, 'start'])->name('updater.start');

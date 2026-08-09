@@ -50,6 +50,7 @@ class InstallsController extends Controller
             'settings' => $this->settings,
             'summary' => $this->summary(),
             'followUp' => $this->followUp(),
+            'stuckNodes' => $this->guard->stuckNodes(),
         ]);
     }
 
@@ -140,6 +141,13 @@ class InstallsController extends Controller
             foreach ($this->guard->installing() as $server) {
                 $minutes = $this->guard->minutesInstalling($server);
 
+                // El numero de intento sale del historial, no de installed_at.
+                // Un servidor cuya primera instalacion nunca llego a terminar
+                // sigue con installed_at vacio, asi que por ahi el segundo
+                // intento no parecia una reinstalacion.
+                $evento = $this->guard->openEventFor($server);
+                $anterior = $evento?->previous();
+
                 $rows[] = [
                     'id' => $server->id,
                     'name' => $server->name,
@@ -152,7 +160,9 @@ class InstallsController extends Controller
                     'allocation' => $this->ports->label($server->allocation),
                     'minutes' => $minutes,
                     'started_at' => $this->guard->startedAt($server)->toDateTimeString(),
-                    'is_reinstall' => $server->installed_at !== null,
+                    'attempt' => (int) ($evento->attempt ?? 1),
+                    'is_reinstall' => (int) ($evento->attempt ?? 1) > 1 || $server->installed_at !== null,
+                    'after_stop' => (bool) $anterior?->wasStoppedBySystem(),
                     'over_limit' => $minutes >= $this->settings->int('watchdog_minutes', 1, 1440),
                     'free_ports' => $this->ports->freeCount($server->node_id),
                     'admin_url' => url('/admin/servers/view/' . $server->id),

@@ -29,7 +29,7 @@ class InstallCommand extends Command
         'logspterodactyl_resource_samples' => [],
         'logspterodactyl_update_runs' => [],
         'logspterodactyl_mail_campaigns' => [],
-        'logspterodactyl_install_events' => ['attempt', 'previous_id', 'forced', 'wings_deleted', 'unblock_until', 'unblocked_times'],
+        'logspterodactyl_install_events' => ['attempt', 'previous_id', 'forced', 'wings_deleted', 'unblock_until', 'unblocked_times', 'diagnosis'],
         'logspterodactyl_mail_logs' => ['campaign_id'],
     ];
 

@@ -31,11 +31,16 @@ class InstallController extends Controller
         }
 
         if ($model->status !== Server::STATUS_INSTALLING) {
-            // Ya no esta instalando. Si la parada es reciente el aviso se
-            // queda un rato explicando que paso: el servidor ya esta
-            // desbloqueado, pero el cliente tiene que enterarse de por que le
-            // ha cambiado el puerto y de que le toca revisar sus datos.
-            $parada = $this->guard->recentStop($model);
+            // Ya no esta instalando. Si el ultimo intento acabo mal hace poco,
+            // el aviso se queda un rato explicando que paso: el servidor ya
+            // esta desbloqueado, pero el cliente tiene que enterarse de por
+            // que le ha cambiado el puerto y de que le toca revisar sus datos
+            // (o de que esta vez no le toca revisar nada, si fue el nodo).
+            $ultimo = $this->guard->recentOutcome($model);
+
+            $parada = $ultimo && ($ultimo->wasStoppedBySystem() || $ultimo->blamesNode())
+                ? $ultimo
+                : null;
 
             return new JsonResponse([
                 'installing' => false,
@@ -46,10 +51,20 @@ class InstallController extends Controller
                 'stopped_id' => $parada?->id,
                 'stopped_by_system' => $parada?->cancelled_by === 'sistema',
                 'port_changed' => $parada?->new_allocation !== null,
+                // Cuando el problema esta en el nodo no se le pide al cliente
+                // que revise nada: sus datos pueden estar perfectos y solo
+                // conseguiriamos que rompiera una configuracion que va bien.
+                'node_issue' => (bool) $parada?->blamesNode(),
                 'server' => $model->name,
                 'address' => $this->address($model),
             ]);
         }
+
+        // Se deja anotado el arranque en cuanto se pregunta. Normalmente ya lo
+        // habra hecho el observador del modelo al empezar la instalacion, pero
+        // asi tambien quedan cubiertas las que estaban en marcha antes de
+        // instalar la extension, sin esperar al cron.
+        $evento = $this->guard->track($model);
 
         $minutes = $this->guard->minutesInstalling($model);
         $threshold = $this->settings->int('client_cancel_minutes', 1, 1440);
@@ -60,6 +75,9 @@ class InstallController extends Controller
             'minutes' => $minutes,
             'threshold' => $threshold,
             'can_cancel' => $this->settings->bool('client_cancel_enabled') && $minutes >= $threshold,
+            'attempt' => (int) $evento->attempt,
+            'attempt_id' => (int) $evento->id,
+            'node_issue' => (bool) $evento->previous()?->blamesNode(),
             'server' => $model->name,
         ]);
     }
