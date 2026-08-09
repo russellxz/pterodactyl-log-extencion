@@ -41,8 +41,8 @@ class InstallController extends Controller
             return new JsonResponse([
                 'installing' => false,
                 'failed' => $fallida,
-                'can_reinstall' => $fallida && $this->settings->bool('client_can_reinstall'),
                 'server' => $model->name,
+                'address' => $this->address($model),
             ]);
         }
 
@@ -93,17 +93,12 @@ class InstallController extends Controller
             ], 425);
         }
 
-        // Por defecto se corta de raiz. Si no, el contenedor de instalacion
-        // del nodo sigue trabajando y cuando termina avisa al panel: el
-        // cliente pulsa "detener", le decimos que si, y sigue viendo
-        // "instalando". Eso es exactamente lo que hay que evitar.
-        if ($this->settings->bool('client_cancel_force')) {
-            $mode = InstallGuard::MODE_FORCE_ROTATE;
-        } elseif ($this->settings->bool('client_cancel_rotate_port')) {
-            $mode = InstallGuard::MODE_FAIL_ROTATE;
-        } else {
-            $mode = InstallGuard::MODE_FAIL;
-        }
+        // Se detiene y se le cambia el puerto. El servidor se queda donde
+        // esta: el cliente revisa sus datos de arranque y vuelve a instalar el
+        // mismo cuando quiera, con el boton de siempre del panel.
+        $mode = $this->settings->bool('client_cancel_rotate_port')
+            ? InstallGuard::MODE_FAIL_ROTATE
+            : InstallGuard::MODE_FAIL;
 
         try {
             $result = $this->guard->stop($model, $mode, (string) $request->user()->email, false);
@@ -117,55 +112,22 @@ class InstallController extends Controller
 
         return new JsonResponse([
             'ok' => true,
-            'message' => 'Instalacion detenida. Revisa los datos de arranque de tu servidor y vuelve a instalarlo.',
+            'message' => 'Instalacion detenida.',
             'port_changed' => $result['port_changed'],
             'new_allocation' => $result['new_allocation'],
-            'can_reinstall' => $this->settings->bool('client_can_reinstall'),
             'warnings' => $result['warnings'],
         ]);
     }
 
-    /**
-     * El cliente relanza la instalacion despues de corregir sus datos.
-     *
-     * Hace falta un camino propio porque tras una parada forzada el servidor ya
-     * no existe en el nodo y el boton de reinstalar del panel daria un 404.
-     * Aqui se vuelve a crear y se lanza la instalacion en una sola accion.
-     */
-    public function reinstall(Request $request, string $server): JsonResponse
+    private function address(Server $server): ?string
     {
-        if (!$this->settings->bool('client_can_reinstall')) {
-            return new JsonResponse(['error' => 'Esta opcion no esta disponible. Ponte en contacto con el soporte.'], 403);
+        $allocation = $server->allocation;
+
+        if (!$allocation) {
+            return null;
         }
 
-        $model = $this->resolve($request, $server);
-
-        if (!$model) {
-            return new JsonResponse(['error' => 'Servidor no encontrado.'], 404);
-        }
-
-        if ($model->status === Server::STATUS_INSTALLING) {
-            return new JsonResponse(['error' => 'Este servidor ya esta instalando.'], 409);
-        }
-
-        if ($model->status === Server::STATUS_SUSPENDED) {
-            return new JsonResponse(['error' => 'Este servidor esta suspendido. Ponte en contacto con el soporte.'], 403);
-        }
-
-        try {
-            $this->guard->recreate($model);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return new JsonResponse([
-                'error' => 'No se pudo relanzar la instalacion. Ponte en contacto con el soporte.',
-            ], 500);
-        }
-
-        return new JsonResponse([
-            'ok' => true,
-            'message' => 'Instalacion relanzada. Puede tardar unos minutos.',
-        ]);
+        return ($allocation->ip_alias ?: $allocation->ip) . ':' . $allocation->port;
     }
 
     /**

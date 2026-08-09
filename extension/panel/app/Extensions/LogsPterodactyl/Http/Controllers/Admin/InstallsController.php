@@ -153,7 +153,6 @@ class InstallsController extends Controller
                     'minutes' => $minutes,
                     'started_at' => $this->guard->startedAt($server)->toDateTimeString(),
                     'is_reinstall' => $server->installed_at !== null,
-                    'safe_to_destroy' => $this->guard->safeToDestroy($server),
                     'over_limit' => $minutes >= $this->settings->int('watchdog_minutes', 1, 1440),
                     'free_ports' => $this->ports->freeCount($server->node_id),
                     'admin_url' => url('/admin/servers/view/' . $server->id),
@@ -226,20 +225,14 @@ class InstallsController extends Controller
 
         $mode = (string) $request->input('mode', InstallGuard::MODE_FAIL_ROTATE);
 
-        if (!in_array($mode, [InstallGuard::MODE_FAIL, InstallGuard::MODE_FAIL_ROTATE, InstallGuard::MODE_FORCE_ROTATE], true)) {
+        if (!in_array($mode, [InstallGuard::MODE_FAIL, InstallGuard::MODE_FAIL_ROTATE], true)) {
             $mode = InstallGuard::MODE_FAIL_ROTATE;
         }
 
         $by = $request->user()->email ?? 'administrador';
 
         try {
-            $result = $this->guard->stop(
-                $model,
-                $mode,
-                $by,
-                $request->boolean('notify', true),
-                $request->boolean('force_anyway')
-            );
+            $result = $this->guard->stop($model, $mode, $by, $request->boolean('notify', true));
         } catch (\Throwable $e) {
             return back()->with('logspterodactyl_error', 'No se pudo detener la instalacion: ' . $e->getMessage());
         }
@@ -250,35 +243,13 @@ class InstallsController extends Controller
             $message .= ' Puerto cambiado de ' . ($result['old_allocation'] ?? '?') . ' a ' . $result['new_allocation'] . '.';
         }
 
-        if ($result['wings_deleted']) {
-            $message .= ' El servidor se borro en el nodo: usa "Recrear en el nodo" antes de volver a instalar.';
-        }
+        $message .= ' El cliente ya puede revisar sus datos y reinstalarlo cuando quiera.';
 
         foreach ($result['warnings'] as $warning) {
             $message .= ' Aviso: ' . $warning;
         }
 
         return back()->with('logspterodactyl_success', $message);
-    }
-
-    /**
-     * Vuelve a crear el servidor en el nodo tras una parada forzada.
-     */
-    public function recreate(Request $request, string $server)
-    {
-        $model = Server::query()->with(['node', 'allocation'])->find((int) $server);
-
-        if (!$model) {
-            return back()->with('logspterodactyl_error', 'Ese servidor ya no existe.');
-        }
-
-        try {
-            $this->guard->recreate($model);
-        } catch (\Throwable $e) {
-            return back()->with('logspterodactyl_error', 'No se pudo recrear el servidor en el nodo: ' . $e->getMessage());
-        }
-
-        return back()->with('logspterodactyl_success', 'El servidor "' . $model->name . '" se esta creando de nuevo en el nodo.');
     }
 
     /**

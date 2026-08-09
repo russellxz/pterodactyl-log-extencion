@@ -20,4 +20,3 @@ use Pterodactyl\Extensions\LogsPterodactyl\Http\Controllers\Client;
 
 Route::get('/server/{server}/install-status', [Client\InstallController::class, 'status'])->name('status');
 Route::post('/server/{server}/cancel-install', [Client\InstallController::class, 'cancel'])->name('cancel');
-Route::post('/server/{server}/reinstall', [Client\InstallController::class, 'reinstall'])->name('reinstall');

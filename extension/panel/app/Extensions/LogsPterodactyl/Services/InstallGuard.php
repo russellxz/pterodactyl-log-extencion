@@ -14,29 +14,30 @@ use Pterodactyl\Repositories\Wings\DaemonServerRepository;
 /**
  * Detiene instalaciones que se han quedado colgadas.
  *
- * Aviso importante sobre lo que se puede y lo que no se puede hacer:
+ * Que hace exactamente al detener una:
  *
- * wings NO expone ningun endpoint para cancelar una instalacion en curso (se
- * ha comprobado en su router: solo hay power, commands, install, reinstall,
- * sync y delete, y las acciones de power se rechazan mientras el servidor esta
- * instalando). Por eso hay dos modos:
+ *   1. El panel deja de considerar el servidor "instalando". Esto es lo que
+ *      desbloquea la pantalla del cliente al momento.
+ *   2. Se le cambia el puerto a otro libre del mismo nodo.
+ *   3. Se avisa al dueno y queda todo registrado.
  *
- *  - Modo normal: el panel marca la instalacion como fallida. El usuario deja
- *    de ver la pantalla de "instalando", puede corregir sus variables y volver
- *    a instalar. El contenedor de instalacion del nodo puede seguir corriendo
- *    hasta que termine por su cuenta.
+ * Y que NO hace, a proposito: no borra el servidor, ni en el panel ni en el
+ * nodo. El servidor se queda donde esta, con su puerto nuevo, para que el
+ * cliente revise sus datos de arranque y vuelva a instalar el mismo con el
+ * boton de siempre del panel.
  *
- *  - Modo forzado: ademas se pide a wings que borre el servidor, lo que
- *    destruye el entorno y con el el contenedor de instalacion colgado. Es la
- *    unica forma real de cortarlo. Los archivos de una instalacion que nunca
- *    termino no tienen valor, pero como el servidor deja de existir en el nodo
- *    hay que volver a crearlo antes de reinstalar: para eso esta recreate().
+ * Sobre el contenedor del nodo: wings no expone ninguna orden para cancelar
+ * una instalacion en marcha (su API solo tiene power, commands, install,
+ * reinstall, sync y delete, y power se rechaza mientras instala). La unica
+ * forma de matar el contenedor seria borrar el servidor en el nodo, y eso
+ * borraria tambien sus archivos, asi que no se hace. El contenedor colgado
+ * termina por su cuenta y para entonces el cliente ya lleva rato pudiendo
+ * trabajar, que es lo que importa.
  */
 class InstallGuard
 {
     public const MODE_FAIL = 'fail';
     public const MODE_FAIL_ROTATE = 'fail_rotate';
-    public const MODE_FORCE_ROTATE = 'force_rotate';
 
     public function __construct(
         private DaemonServerRepository $daemon,
@@ -104,7 +105,11 @@ class InstallGuard
     /**
      * Para la instalacion de un servidor.
      *
-     * @param string $mode  uno de los MODE_*
+     * No se borra nada: el servidor se queda en su sitio, con puerto nuevo,
+     * listo para que el cliente revise sus datos y lo reinstale el mismo con
+     * el boton de siempre del panel.
+     *
+     * @param string $mode  MODE_FAIL (solo parar) o MODE_FAIL_ROTATE (y cambiar puerto)
      * @param string $by    quien lo pide: "sistema", el correo del cliente, etc.
      *
      * @return array{
@@ -112,70 +117,25 @@ class InstallGuard
      *     port_changed: bool,
      *     old_allocation: ?string,
      *     new_allocation: ?string,
-     *     wings_deleted: bool,
      *     warnings: array<int, string>
      * }
      */
-    public function stop(Server $server, string $mode, string $by, bool $notifyOwner = true, bool $forceAnyway = false): array
+    public function stop(Server $server, string $mode, string $by, bool $notifyOwner = true): array
     {
         $warnings = [];
-        $wingsDeleted = false;
         $minutes = $this->minutesInstalling($server);
         $wasReinstall = $server->installed_at !== null;
-        $forzado = $mode === self::MODE_FORCE_ROTATE;
 
-        // 1) Modo forzado: se destruye el entorno en el nodo. Es LO UNICO que
-        //    corta de verdad un contenedor de instalacion atascado, porque
-        //    wings no tiene ninguna orden para cancelar una instalacion.
-        //
-        //    Sin esto pasa justo lo que se ve en la practica: el panel marca la
-        //    instalacion como fallida, pero el contenedor sigue vivo y cuando
-        //    termina avisa al panel, que vuelve a mover el estado del servidor.
-        //    Al cliente le parece que nunca se paro.
-        // Antes de borrar nada hay que estar seguro de que no hay datos del
-        // cliente de por medio: borrar en el nodo destruye los archivos del
-        // servidor. En una instalacion que nunca termino no hay nada que
-        // perder, pero en la reinstalacion de un servidor que ya funcionaba
-        // estariamos borrandole el mundo entero a un cliente.
-        if ($forzado && !$forceAnyway && !$this->safeToDestroy($server)) {
-            $forzado = false;
-            $warnings[] = 'No se borro en el nodo porque este servidor ya tenia una instalacion completada '
-                . 'y hacerlo destruiria los archivos del cliente. Se marco como fallida y se cambio el puerto; '
-                . 'el contenedor de instalacion del nodo puede seguir corriendo hasta que termine solo.';
-
-            ExtensionEvent::log('warning', 'installs', sprintf(
-                'No se forzo la parada de "%s": tiene datos y borrarlo en el nodo los destruiria',
-                $server->name
-            ), [], $server->id);
-        }
-
-        if ($forzado) {
-            try {
-                $this->daemon->setServer($server)->delete();
-                $wingsDeleted = true;
-            } catch (\Throwable $e) {
-                $mensaje = $this->short($e);
-
-                // Un 404 significa que el servidor ya no estaba en el nodo:
-                // el objetivo (que no siga instalando) ya se cumple.
-                if (str_contains($mensaje, '404') || stripos($mensaje, 'not exist') !== false) {
-                    $wingsDeleted = true;
-                } else {
-                    $warnings[] = 'No se pudo borrar el servidor en el nodo, la instalacion podria seguir corriendo alli: ' . $mensaje;
-                }
-            }
-        }
-
-        // 2) El panel deja de considerarlo "instalando". Esto es lo que
-        //    desbloquea la pantalla del cliente.
+        // 1) El panel deja de considerarlo "instalando". Esto es lo que
+        //    desbloquea la pantalla del cliente al momento.
         $status = $wasReinstall ? Server::STATUS_REINSTALL_FAILED : Server::STATUS_INSTALL_FAILED;
         $server->forceFill(['status' => $status])->save();
 
-        // 3) Cambio de puerto.
+        // 2) Cambio de puerto, que es la otra mitad del trabajo: el cliente se
+        //    encuentra el servidor en una direccion nueva y limpia.
         $rotation = null;
-        $rotate = in_array($mode, [self::MODE_FAIL_ROTATE, self::MODE_FORCE_ROTATE], true);
 
-        if ($rotate) {
+        if ($mode === self::MODE_FAIL_ROTATE) {
             try {
                 $rotation = $this->ports->rotate($server, $this->settings->bool('watchdog_same_ip'));
 
@@ -187,27 +147,24 @@ class InstallGuard
             }
         }
 
-        // 4) Se avisa al nodo de la nueva configuracion. Si el servidor se
-        //    borro en el paso 1 esto ya no aplica.
-        if (!$wingsDeleted) {
-            try {
-                $this->daemon->setServer($server->refresh())->sync();
-            } catch (\Throwable $e) {
-                $warnings[] = 'No se pudo sincronizar con el nodo: ' . $this->short($e);
-            }
+        // 3) Se le pasa al nodo la configuracion nueva (el puerto).
+        try {
+            $this->daemon->setServer($server->refresh())->sync();
+        } catch (\Throwable $e) {
+            $warnings[] = 'No se pudo sincronizar con el nodo: ' . $this->short($e);
         }
 
-        // 5) Se vuelve a dejar el estado como debe quedar. Entre los pasos 1 y
-        //    4 puede haber llegado el aviso de wings diciendo que la
-        //    instalacion "termino" (mal), y ese aviso escribe en el servidor.
+        // 4) Se vuelve a fijar el estado. Entre los pasos 1 y 3 puede haber
+        //    llegado el aviso de wings diciendo que la instalacion termino, y
+        //    ese aviso escribe en el servidor.
         $server->refresh();
 
         if ($server->status === Server::STATUS_INSTALLING) {
             $server->forceFill(['status' => $status])->save();
         }
 
-        // 6) Historial.
-        $this->closeInstallEvent($server, $by, $minutes, $rotation, $mode, $wingsDeleted);
+        // 5) Historial.
+        $this->closeInstallEvent($server, $by, $minutes, $rotation, $mode);
 
         ExtensionEvent::log('warning', 'installs', sprintf(
             'Instalacion detenida en "%s" tras %d minutos (%s)',
@@ -218,11 +175,10 @@ class InstallGuard
             'modo' => $mode,
             'puerto_anterior' => $rotation['old'] ?? null,
             'puerto_nuevo' => $rotation['new'] ?? null,
-            'borrado_en_wings' => $wingsDeleted,
             'avisos' => $warnings,
         ], $server->id);
 
-        // 7) Correo al dueno.
+        // 6) Correo al dueno.
         if ($notifyOwner) {
             $this->notifyOwner($server, $minutes, $rotation, $warnings);
         }
@@ -232,95 +188,8 @@ class InstallGuard
             'port_changed' => $rotation !== null,
             'old_allocation' => $rotation['old'] ?? null,
             'new_allocation' => $rotation['new'] ?? null,
-            'wings_deleted' => $wingsDeleted,
-            'needs_recreate' => $wingsDeleted,
-            'forced' => $forzado,
             'warnings' => $warnings,
         ];
-    }
-
-    /**
-     * ¿Se puede borrar este servidor en el nodo sin cargarse datos del cliente?
-     *
-     * Solo si nunca llego a completarse una instalacion. Ojo con un detalle:
-     * el panel rellena installed_at incluso cuando la instalacion FALLA, asi
-     * que ese campo por si solo no vale. Por eso se mira tambien el historial
-     * propio: si todos los intentos anteriores acabaron mal, no hay nada
-     * valioso en el disco.
-     */
-    public function safeToDestroy(Server $server): bool
-    {
-        // Nunca se instalo: seguro.
-        if ($server->installed_at === null) {
-            return true;
-        }
-
-        $historial = InstallEvent::query()
-            ->where('server_id', $server->id)
-            ->whereIn('status', [
-                InstallEvent::STATUS_SUCCESS,
-                InstallEvent::STATUS_FAILED,
-                InstallEvent::STATUS_TIMEOUT,
-                InstallEvent::STATUS_CANCELLED,
-            ])
-            ->get(['status']);
-
-        // Sin historial propio no se puede saber, asi que se es prudente:
-        // installed_at con fecha puede significar un servidor que funcionaba.
-        if ($historial->isEmpty()) {
-            return false;
-        }
-
-        // Si alguna vez termino bien, tiene datos del cliente.
-        return !$historial->contains(fn ($e) => $e->status === InstallEvent::STATUS_SUCCESS);
-    }
-
-    /**
-     * Vuelve a crear el servidor en el nodo y lanza la instalacion.
-     *
-     * Hace falta despues de un corte forzado, porque el servidor ya no existe
-     * en wings y el boton nativo de reinstalar del panel daria un 404. Si
-     * resulta que si existe (porque el corte no llego a borrarlo), se usa la
-     * reinstalacion normal en vez de intentar crearlo dos veces.
-     */
-    public function recreate(Server $server): void
-    {
-        $server->forceFill(['status' => Server::STATUS_INSTALLING])->save();
-
-        try {
-            $this->daemon->setServer($server)->create(false);
-            $via = 'recreado en el nodo';
-        } catch (\Throwable $e) {
-            $mensaje = $this->short($e);
-            $yaExiste = str_contains($mensaje, '409')
-                || str_contains($mensaje, '422')
-                || stripos($mensaje, 'already exists') !== false;
-
-            if (!$yaExiste) {
-                // No se pudo crear y tampoco es que ya existiera: se deja el
-                // servidor como estaba para que no quede colgado en
-                // "instalando" para siempre.
-                $server->forceFill([
-                    'status' => $server->installed_at === null
-                        ? Server::STATUS_INSTALL_FAILED
-                        : Server::STATUS_REINSTALL_FAILED,
-                ])->save();
-
-                throw $e;
-            }
-
-            // El servidor seguia en el nodo: se reinstala por la via normal.
-            $this->daemon->setServer($server)->reinstall();
-            $via = 'reinstalado (seguia existiendo en el nodo)';
-        }
-
-        $this->openInstallEvent($server, true);
-
-        ExtensionEvent::log('info', 'installs', sprintf(
-            'Servidor "%s" %s, instalando de nuevo',
-            $server->name,
-            $via
-        ), ['puerto' => $this->ports->label($server->allocation)], $server->id);
     }
 
     /**
@@ -474,23 +343,23 @@ class InstallGuard
         return $closed;
     }
 
-    private function closeInstallEvent(Server $server, string $by, int $minutes, ?array $rotation, string $mode, bool $wingsDeleted): void
+    private function closeInstallEvent(Server $server, string $by, int $minutes, ?array $rotation, string $mode): void
     {
         $event = $this->openEventFor($server) ?? $this->openInstallEvent($server, $server->installed_at !== null);
 
         $event->fill([
             'status' => $by === 'sistema' ? InstallEvent::STATUS_TIMEOUT : InstallEvent::STATUS_CANCELLED,
             'resolution' => $mode,
-            'forced' => $mode === self::MODE_FORCE_ROTATE,
-            'wings_deleted' => $wingsDeleted,
+            'forced' => true,
+            'wings_deleted' => false,
             'cancelled_by' => $by,
             'new_allocation' => $rotation['new'] ?? null,
             'old_allocation' => $rotation['old'] ?? $event->old_allocation,
             'finished_at' => now(),
             'duration_seconds' => $minutes * 60,
-            'notes' => $wingsDeleted
-                ? 'Instalacion cortada de raiz: el servidor se borro en el nodo para matar el contenedor. Hay que recrearlo antes de reinstalar.'
-                : 'La instalacion se marco como fallida en el panel (el contenedor del nodo puede seguir corriendo).',
+            'notes' => $rotation
+                ? 'Instalacion detenida y servidor movido a otro puerto. El cliente puede revisar sus datos y reinstalar cuando quiera.'
+                : 'Instalacion detenida. No se pudo cambiar el puerto.',
         ])->save();
     }
 

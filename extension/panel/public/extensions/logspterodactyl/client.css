@@ -334,3 +334,8 @@
     display: block;
     margin-top: 6px;
 }
+
+.logspterodactyl-badge-ok {
+    background: rgba(45, 160, 90, .16);
+    color: #6fd39b;
+}

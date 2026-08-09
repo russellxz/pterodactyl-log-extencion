@@ -275,7 +275,6 @@
 
             var liveUrl = @json(route('admin.logspterodactyl.installs.live'));
             var stopUrlTemplate = @json(route('admin.logspterodactyl.installs.stop', ['server' => '__ID__']));
-            var recreateUrlTemplate = @json(route('admin.logspterodactyl.installs.recreate', ['server' => '__ID__']));
             var token = @json(csrf_token());
             var container = document.getElementById('logspterodactyl-live');
             var meta = document.getElementById('logspterodactyl-live-meta');
@@ -352,15 +351,10 @@
                         + '<td>'
                         + form(stopUrlTemplate, s.id, { mode: 'fail_rotate', notify: '1' },
                             'Parar y cambiar puerto', 'btn-warning',
-                            'Se marcara la instalacion como fallida y se movera el servidor a otro puerto libre del nodo. ¿Continuar?')
-                        + (s.safe_to_destroy
-                            ? form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1' },
-                                'Parada forzada', 'btn-danger',
-                                'Se borrara el servidor en el nodo para cortar el contenedor de instalacion. Este servidor nunca llego a instalarse, asi que no hay datos del cliente que perder. Despues habra que recrearlo. ¿Continuar?')
-                            : form(stopUrlTemplate, s.id, { mode: 'force_rotate', notify: '1', force_anyway: '1' },
-                                'Forzar (BORRA DATOS)', 'btn-danger',
-                                'CUIDADO: este servidor YA TENIA una instalacion completada. Forzar la parada BORRA SUS ARCHIVOS EN EL NODO y el cliente perdera todo lo que tuviera dentro. Solo hazlo si sabes que no hay nada que salvar. ¿Continuar de todas formas?'))
-                        + (s.safe_to_destroy ? '' : '<div class="logspterodactyl-muted logspterodactyl-small">tiene datos: la parada normal no borra nada</div>')
+                            'Se detendra la instalacion y el servidor pasara a otro puerto libre del nodo. No se borra nada: el cliente podra revisar sus datos de arranque y reinstalarlo el mismo. ¿Continuar?')
+                        + form(stopUrlTemplate, s.id, { mode: 'fail', notify: '1' },
+                            'Solo parar', 'btn-default',
+                            'Se detendra la instalacion sin tocar el puerto. ¿Continuar?')
                         + '</td></tr>';
                 }
 

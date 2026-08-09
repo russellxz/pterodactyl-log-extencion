@@ -30,7 +30,6 @@ Route::get('/events', [Admin\EventsController::class, 'index'])->name('events');
 Route::get('/installs', [Admin\InstallsController::class, 'index'])->name('installs');
 Route::get('/installs/live', [Admin\InstallsController::class, 'live'])->name('installs.live');
 Route::post('/installs/{server}/stop', [Admin\InstallsController::class, 'stop'])->name('installs.stop');
-Route::post('/installs/{server}/recreate', [Admin\InstallsController::class, 'recreate'])->name('installs.recreate');
 
 // --- Correos ---
 Route::get('/mails', [Admin\MailsController::class, 'index'])->name('mails');
