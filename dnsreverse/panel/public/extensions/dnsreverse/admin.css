@@ -1,0 +1,357 @@
+/*!
+ * DNS Reverse - estilos del area de administracion
+ *
+ * Todo va con el prefijo .dnsreverse- para no pisar ni una sola clase del
+ * panel ni del tema Arix. Los colores salen de variables con valor de reserva,
+ * asi que si el tema define las suyas se adapta, y si no, se ve bien igual.
+ */
+
+:root {
+    --dnsreverse-borde: rgba(255, 255, 255, 0.08);
+    --dnsreverse-fondo: rgba(255, 255, 255, 0.03);
+    --dnsreverse-texto: inherit;
+    --dnsreverse-suave: rgba(148, 163, 184, 0.9);
+    --dnsreverse-ok: #22c55e;
+    --dnsreverse-aviso: #f59e0b;
+    --dnsreverse-error: #ef4444;
+    --dnsreverse-info: #38bdf8;
+    --dnsreverse-acento: #ec4899;
+}
+
+/* En el panel original (AdminLTE claro) los bordes claritos no se ven, asi
+   que se oscurecen cuando el fondo de la pagina es claro. */
+.skin-blue .dnsreverse-tabs,
+.skin-blue .dnsreverse-stat,
+.skin-blue .dnsreverse-notice {
+    --dnsreverse-borde: rgba(0, 0, 0, 0.12);
+    --dnsreverse-fondo: rgba(0, 0, 0, 0.02);
+    --dnsreverse-suave: #6b7280;
+}
+
+.dnsreverse-svg {
+    display: inline-block;
+    vertical-align: -2px;
+    flex-shrink: 0;
+}
+
+/* --- Pestanas ----------------------------------------------------------- */
+
+.dnsreverse-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 6px;
+    border: 1px solid var(--dnsreverse-borde);
+    border-radius: 10px;
+    background: var(--dnsreverse-fondo);
+}
+
+.dnsreverse-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 13px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--dnsreverse-suave);
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dnsreverse-tab:hover,
+.dnsreverse-tab:focus {
+    text-decoration: none;
+    color: inherit;
+    background: rgba(148, 163, 184, 0.12);
+}
+
+.dnsreverse-tab.active {
+    color: #fff;
+    background: var(--dnsreverse-acento);
+}
+
+.dnsreverse-tab.active:hover {
+    color: #fff;
+}
+
+/* --- Tarjetas de numeros ------------------------------------------------ */
+
+.dnsreverse-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.dnsreverse-stats-small {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.dnsreverse-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--dnsreverse-borde);
+    border-radius: 10px;
+    background: var(--dnsreverse-fondo);
+}
+
+.dnsreverse-stat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    background: rgba(56, 189, 248, 0.14);
+    color: var(--dnsreverse-info);
+}
+
+.dnsreverse-stat-warn .dnsreverse-stat-icon {
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--dnsreverse-aviso);
+}
+
+.dnsreverse-stat-number {
+    display: block;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.dnsreverse-stat-label {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--dnsreverse-suave);
+}
+
+/* --- Avisos ------------------------------------------------------------- */
+
+.dnsreverse-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--dnsreverse-borde);
+    border-left-width: 3px;
+    border-radius: 8px;
+    background: var(--dnsreverse-fondo);
+}
+
+.dnsreverse-notice-body {
+    flex: 1;
+}
+
+.dnsreverse-notice-body p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--dnsreverse-suave);
+}
+
+.dnsreverse-notice-icon {
+    display: inline-flex;
+    padding-top: 1px;
+}
+
+.dnsreverse-notice-info { border-left-color: var(--dnsreverse-info); }
+.dnsreverse-notice-info .dnsreverse-notice-icon { color: var(--dnsreverse-info); }
+.dnsreverse-notice-aviso { border-left-color: var(--dnsreverse-aviso); }
+.dnsreverse-notice-aviso .dnsreverse-notice-icon { color: var(--dnsreverse-aviso); }
+.dnsreverse-notice-error { border-left-color: var(--dnsreverse-error); }
+.dnsreverse-notice-error .dnsreverse-notice-icon { color: var(--dnsreverse-error); }
+.dnsreverse-notice-ok { border-left-color: var(--dnsreverse-ok); }
+.dnsreverse-notice-ok .dnsreverse-notice-icon { color: var(--dnsreverse-ok); }
+
+.dnsreverse-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.dnsreverse-alert-ok {
+    color: var(--dnsreverse-ok);
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.dnsreverse-alert-error {
+    color: var(--dnsreverse-error);
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* --- Etiquetas ---------------------------------------------------------- */
+
+.dnsreverse-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    background: rgba(148, 163, 184, 0.18);
+    color: var(--dnsreverse-suave);
+}
+
+.dnsreverse-pill-ok { background: rgba(34, 197, 94, 0.16); color: var(--dnsreverse-ok); }
+.dnsreverse-pill-warn { background: rgba(245, 158, 11, 0.16); color: var(--dnsreverse-aviso); }
+.dnsreverse-pill-error { background: rgba(239, 68, 68, 0.16); color: var(--dnsreverse-error); }
+.dnsreverse-pill-off { background: rgba(148, 163, 184, 0.14); }
+
+.dnsreverse-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.dnsreverse-chip {
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(148, 163, 184, 0.14);
+}
+
+/* --- Filtros y formularios en linea ------------------------------------- */
+
+.dnsreverse-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.dnsreverse-filters .form-control {
+    width: auto;
+    min-width: 150px;
+}
+
+.dnsreverse-toolbar {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.dnsreverse-inline-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin: 0;
+}
+
+.dnsreverse-inline-form .form-control {
+    width: auto;
+    min-width: 80px;
+    flex: 1;
+}
+
+.dnsreverse-actions form {
+    margin: 0;
+}
+
+.dnsreverse-row-off {
+    opacity: 0.55;
+}
+
+.dnsreverse-domain-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.dnsreverse-link {
+    color: var(--dnsreverse-info);
+}
+
+.dnsreverse-inline-error {
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--dnsreverse-error);
+}
+
+.dnsreverse-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+}
+
+.dnsreverse-code {
+    padding: 12px 14px;
+    border: 1px solid var(--dnsreverse-borde);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.dnsreverse-test-result {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 13px;
+}
+
+.dnsreverse-test-ok { color: var(--dnsreverse-ok); }
+.dnsreverse-test-error { color: var(--dnsreverse-error); }
+.dnsreverse-test-loading { color: var(--dnsreverse-suave); }
+
+/* --- Listado de movimientos --------------------------------------------- */
+
+.dnsreverse-feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.dnsreverse-feed li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--dnsreverse-borde);
+    font-size: 13px;
+}
+
+.dnsreverse-feed li:last-child {
+    border-bottom: 0;
+}
+
+.dnsreverse-feed-time {
+    flex-shrink: 0;
+    width: 110px;
+    font-size: 11px;
+    color: var(--dnsreverse-suave);
+}
+
+.dnsreverse-feed-error .dnsreverse-feed-text {
+    color: var(--dnsreverse-error);
+}
+
+.dnsreverse-context span {
+    display: inline-block;
+    margin-right: 10px;
+}
+
+.dnsreverse-level-error td {
+    border-left: 2px solid var(--dnsreverse-error);
+}
+
+@media (max-width: 767px) {
+    .dnsreverse-filters .form-control {
+        width: 100%;
+    }
+
+    .dnsreverse-feed-time {
+        width: 80px;
+    }
+}
