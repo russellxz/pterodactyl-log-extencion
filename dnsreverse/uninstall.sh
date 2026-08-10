@@ -163,6 +163,30 @@ fi
 php artisan dnsreverse:arix remove >/dev/null 2>&1 \
     && ok "Enlace quitado del menu del tema Arix (si lo tenias)"
 
+# La entrada del menu del admin.
+#
+# Esto es imprescindible: esa entrada llama a route('admin.dnsreverse.index'),
+# y si la extension ya no esta, esa ruta no existe y el area de administracion
+# entera da error 500. Se quita SIEMPRE, aunque el resto falle.
+rm -f "$PANEL/resources/views/admin/extensions/dnsreverse.blade.php" \
+    && ok "Quitada la entrada del menu del admin (hueco del tema)"
+
+if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+    php -r '
+        $f = $argv[1];
+        $s = file_get_contents($f);
+        $s = preg_replace("/[ \t]*\{\{--\s*DnsReverse NAV START.*?DnsReverse NAV END\s*--\}\}\R?/s", "", $s);
+        file_put_contents($f, $s);
+    ' "$PANEL/resources/views/layouts/admin.blade.php" \
+        && ok "Quitada la entrada del menu del admin (plantilla)"
+fi
+
+# Y la pantalla del cliente, este donde este.
+rm -rf "$PANEL/resources/scripts/components/server/extensions/dnsreverse" \
+       "$PANEL/resources/scripts/components/server/dnsreverse"
+
+php artisan view:clear >/dev/null 2>&1
+
 RECOMPILAR=0
 
 if grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null \

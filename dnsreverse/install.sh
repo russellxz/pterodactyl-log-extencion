@@ -70,14 +70,42 @@ fi
 
 # --- Aviso si estaba la version antigua -------------------------------------
 
+# Solo puede quedar UNA version.
+#
+# Si conviven, salen apartados repetidos en el menu y es un lio. La antigua se
+# quita entera (sus archivos, sus rutas y su entrada del menu), pero NO sus
+# datos: la tabla server_proxy es la misma que usa esta, ahi viven los DNS de
+# tus clientes y se quedan donde estan.
 VIEJA=0
 
 if [ -f "$PANEL/app/Http/Controllers/Admin/ProxySettingsController.php" ] \
-   || [ -f "$PANEL/app/Models/ServerProxy.php" ]; then
+   || [ -f "$PANEL/app/Models/ServerProxy.php" ] \
+   || grep -q 'admin.proxy.' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+
     VIEJA=1
     warn "Detectada la version antigua (la que se instalaba tocando archivos del panel)."
-    warn "No se va a borrar nada suyo: las dos pueden convivir sin problema."
-    warn "Tus dominios ya creados apareceran en la extension nueva tal cual."
+    warn "Se quita para que no salgan apartados repetidos. Tus DNS no se tocan."
+
+    LIMPIADOR="$ORIGEN/app/Extensions/DnsReverse/tools/limpiar-viejo.php"
+
+    if [ -f "$LIMPIADOR" ]; then
+        php "$LIMPIADOR" "$PANEL" --limpiar 2>&1 | sed 's/^/  /'
+    else
+        warn "No se encontro el limpiador. Quitala a mano o usa reinstalar-limpio.sh"
+    fi
+fi
+
+# Restos de una instalacion anterior de ESTA extension, por si se quedo a
+# medias. Se quitan siempre antes de copiar, para no acabar con dos entradas.
+rm -f "$PANEL/resources/views/admin/extensions/dnsreverse.blade.php"
+
+if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+    php -r '
+        $f = $argv[1];
+        $s = file_get_contents($f);
+        $s = preg_replace("/[ \t]*\{\{--\s*DnsReverse NAV START.*?DnsReverse NAV END\s*--\}\}\R?/s", "", $s);
+        file_put_contents($f, $s);
+    ' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null
 fi
 
 # --- 1. Copiar los archivos -------------------------------------------------
@@ -158,13 +186,79 @@ title "5. Ajustando permisos"
 
 bash "$AQUI/permissions.sh" "$PANEL" || warn "Algunos permisos no se pudieron ajustar (vuelve a lanzarlo con sudo)"
 
-# --- 6. La pantalla del cliente y el boton del admin ------------------------
+# --- 6. El boton del area de administracion ---------------------------------
+
+title "6. Boton del area de administracion"
+#
+# Esta parte del panel es Blade, no React: sale al momento y no hay que
+# compilar nada. Si el tema trae el hueco para extensiones, se deja ahi el
+# archivo; si no, se mete el <li> en la plantilla, como hacia la extension
+# original.
+HUECO_ADMIN="$PANEL/resources/views/admin/extensions"
+
+if [ -d "$HUECO_ADMIN" ]; then
+    cat > "$HUECO_ADMIN/dnsreverse.blade.php" <<'BLADE'
+{{--
+    Entrada del menu de DNS Reverse.
+
+    El @if NO sobra: si algun dia se desinstala la extension y este archivo se
+    queda aqui, route() lanzaria una excepcion y el area de administracion
+    entera daria error 500. Comprobando primero que la ruta existe, lo peor que
+    puede pasar es que no salga el boton.
+--}}
+@if (Route::has('admin.dnsreverse.index'))
+    <li class="header">DNS REVERSE</li>
+    <li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
+        <a href="{{ route('admin.dnsreverse.index') }}">
+            <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
+        </a>
+    </li>
+@endif
+BLADE
+    ok "Entrada anadida al menu del admin (hueco del tema)"
+elif [ -f "$PANEL/resources/views/layouts/admin.blade.php" ]; then
+    if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
+        ok "La entrada del admin ya estaba en la plantilla"
+    else
+        NAV_ADMIN=$(cat <<'BLADE'
+                        {{-- DnsReverse NAV START --}}
+                        @if (Route::has('admin.dnsreverse.index'))
+                        <li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.dnsreverse.index') }}">
+                                <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
+                            </a>
+                        </li>
+                        @endif
+                        {{-- DnsReverse NAV END --}}
+BLADE
+)
+        awk -v block="$NAV_ADMIN" '
+            { print }
+            /route\(.admin\.nodes.\)/ { encontrado = 1 }
+            encontrado && /<\/li>/ { print block; encontrado = 0 }
+        ' "$PANEL/resources/views/layouts/admin.blade.php" > /tmp/dnsrev-admin.tmp \
+            && mv /tmp/dnsrev-admin.tmp "$PANEL/resources/views/layouts/admin.blade.php"
+
+        if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
+            ok "Entrada anadida al menu del admin"
+        else
+            warn "No se pudo anadir la entrada al menu del admin."
+            warn "Entra directamente a /admin/dnsreverse"
+        fi
+    fi
+fi
+
+ajustar_permisos
+php "$PANEL/artisan" view:clear >/dev/null 2>&1
+
+
+# --- 7. La pantalla del cliente ---------------------------------------------
 #
 # Aqui no se inyecta nada en las paginas del panel. El boton del cliente es una
 # pantalla mas de React que se compila con el panel, igual que hacia la
 # extension original, y el del admin es un <li> de Blade.
 
-title "6. Pantalla del cliente y botones"
+title "7. Pantalla del cliente"
 
 if [ "${DNSREVERSE_SIN_FRONTEND:-0}" = "1" ]; then
     warn "Te saltas la compilacion (DNSREVERSE_SIN_FRONTEND=1)."
@@ -183,9 +277,9 @@ else
     fi
 fi
 
-# --- 7. Comprobacion final --------------------------------------------------
+# --- 8. Comprobacion final --------------------------------------------------
 
-title "7. Comprobacion final"
+title "8. Comprobacion final"
 
 php artisan dnsreverse:doctor || true
 
