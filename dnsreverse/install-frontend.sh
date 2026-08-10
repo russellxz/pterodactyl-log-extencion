@@ -44,8 +44,25 @@ done
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGEN="$AQUI/panel/frontend"
-DESTINO="$PANEL/resources/scripts/components/server/dnsreverse"
 PARCHE="$PANEL/app/Extensions/DnsReverse/tools/patch-frontend.php"
+
+# Donde se deja la pantalla.
+#
+# Si el tema trae el hueco para extensiones (Arix preparado), se usa ese: con
+# dejar ahi la carpeta salen la pagina Y el boton, sin tocar routes.ts ni la
+# base de datos.
+#
+# Si no lo trae (panel normal o Arix sin preparar), se hace como la extension
+# original: componente + entrada en routes.ts.
+HUECO="$PANEL/resources/scripts/components/server/extensions"
+
+if [ -d "$HUECO" ]; then
+    MODO_HUECO=1
+    DESTINO="$HUECO/dnsreverse"
+else
+    MODO_HUECO=0
+    DESTINO="$PANEL/resources/scripts/components/server/dnsreverse"
+fi
 
 if [ -t 1 ]; then
     B=$'\033[1m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; N=$'\033[0m'
@@ -223,8 +240,9 @@ if [ "$QUITAR" -eq 1 ]; then
 
     guardar_assets
 
-    php "$PARCHE" "$PANEL" --remove
+    [ "$MODO_HUECO" -eq 1 ] || php "$PARCHE" "$PANEL" --remove
     rm -rf "$DESTINO"
+    rm -f "$PANEL/resources/views/admin/extensions/dnsreverse.blade.php"
     ok "Componente y ruta quitados"
 
     if [ "$ARIX" -eq 1 ]; then
@@ -248,13 +266,10 @@ if [ "$QUITAR" -eq 1 ]; then
 
     ajustar_permisos
 
-    php "$PANEL/artisan" dnsreverse:ui inject >/dev/null 2>&1 \
-        && ok "Se ha vuelto a activar la pantalla del cliente en modo inyectado"
 
     php "$PANEL/artisan" view:clear >/dev/null 2>&1
 
     printf '\n%s  Listo: el panel vuelve a estar como lo trae Pterodactyl.%s\n' "$G$B" "$N"
-    printf '  El boton del cliente vuelve al modo inyectado (sin compilar).\n\n'
     exit 0
 fi
 
@@ -270,19 +285,41 @@ fi
 
 mkdir -p "$DESTINO"
 
-if cp "$ORIGEN/components/DnsReverseContainer.tsx" "$DESTINO/DnsReverseContainer.tsx"; then
-    ok "Componente copiado a resources/scripts/components/server/dnsreverse/"
-else
+if ! cp "$ORIGEN/components/DnsReverseContainer.tsx" "$DESTINO/DnsReverseContainer.tsx"; then
     err "No se pudo copiar el componente. ¿Estas ejecutando con sudo?"
     exit 1
+fi
+
+if [ "$MODO_HUECO" -eq 1 ]; then
+    # El tema trae el hueco: se deja tambien el route.tsx y ya esta. El tema
+    # los busca solo al compilar y saca la pagina y el boton.
+    cat > "$DESTINO/route.tsx" <<'TSX'
+import DnsReverseContainer from './DnsReverseContainer';
+
+export default {
+    path: '/dnsreverse',
+    permission: null,
+    name: 'DNS Reverse',
+    icon: 'HiOutlineGlobeAlt',
+    component: DnsReverseContainer,
+};
+TSX
+    ok "Pantalla puesta en el hueco de extensiones del tema"
+else
+    ok "Componente copiado a resources/scripts/components/server/dnsreverse/"
 fi
 
 # --- 3. Anadir la ruta ------------------------------------------------------
 
 title "3. Anadiendo el boton al menu del cliente"
 
-php "$PARCHE" "$PANEL"
-RESULTADO=$?
+if [ "$MODO_HUECO" -eq 1 ]; then
+    ok "No hace falta tocar routes.ts: el tema recoge la carpeta solo"
+    RESULTADO=0
+else
+    php "$PARCHE" "$PANEL"
+    RESULTADO=$?
+fi
 
 if [ "$RESULTADO" -eq 1 ]; then
     err "No se pudo anadir la ruta. No se compila nada: el panel queda intacto."
@@ -290,7 +327,7 @@ if [ "$RESULTADO" -eq 1 ]; then
     exit 1
 fi
 
-ok "routes.ts listo (copia del original en routes.ts.dnsreverse-original)"
+[ "$MODO_HUECO" -eq 1 ] || ok "routes.ts listo (copia del original al lado)"
 
 # --- 4. Dependencias --------------------------------------------------------
 
@@ -315,8 +352,6 @@ if ! compilar; then
     devolver_assets
     php "$PARCHE" "$PANEL" --remove >/dev/null 2>&1
     rm -rf "$DESTINO"
-    printf '\n  Puedes seguir usando el modo inyectado, que no necesita compilar:\n'
-    printf '      cd %s && php artisan dnsreverse:ui inject\n\n' "$PANEL"
     exit 1
 fi
 
@@ -326,22 +361,62 @@ ok "Panel compilado"
 
 title "6. Ajustando la extension"
 
-if php "$PANEL/artisan" dnsreverse:ui native; then
-    ok "Modo nativo activado (la pantalla inyectada se apaga para no duplicar el boton)"
-else
-    warn "No se pudo cambiar el modo automaticamente."
-    warn "Hazlo a mano en Admin -> DNS Reverse -> Ajustes: desmarca 'Pantalla del cliente'."
-fi
-
-# El tema Arix no saca el menu del cliente de routes.ts: lo saca de su propia
-# lista de enlaces guardada en la base de datos. Asi que ademas de la ruta hay
-# que anadirle el enlace, que es como el tema anade sus apartados.
-if [ "$ARIX" -eq 1 ]; then
+# Con el hueco del tema, el boton del cliente ya sale solo. Sin hueco, en Arix
+# hay que anadir el enlace a su lista, que es como el tema anade sus apartados.
+if [ "$ARIX" -eq 1 ] && [ "$MODO_HUECO" -eq 0 ]; then
     if php "$PANEL/artisan" dnsreverse:arix add; then
         ok "Enlace anadido al menu del tema Arix"
     else
         warn "No se pudo anadir el enlace al menu de Arix."
         warn "Ponlo a mano en Admin -> Arix -> Links, con la url /dnsreverse"
+    fi
+fi
+
+# --- El boton del area de administracion ------------------------------------
+#
+# Esta parte del panel es Blade, no React: sale al momento y no hay que
+# compilar nada. Si el tema trae el hueco para extensiones, se deja ahi el
+# archivo; si no, se mete el <li> en la plantilla, como hacia la extension
+# original.
+HUECO_ADMIN="$PANEL/resources/views/admin/extensions"
+
+if [ -d "$HUECO_ADMIN" ]; then
+    cat > "$HUECO_ADMIN/dnsreverse.blade.php" <<'BLADE'
+<li class="header">DNS REVERSE</li>
+<li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
+    <a href="{{ route('admin.dnsreverse.index') }}">
+        <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
+    </a>
+</li>
+BLADE
+    ok "Entrada anadida al menu del admin (hueco del tema)"
+elif [ -f "$PANEL/resources/views/layouts/admin.blade.php" ]; then
+    if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
+        ok "La entrada del admin ya estaba en la plantilla"
+    else
+        NAV_ADMIN=$(cat <<'BLADE'
+                        {{-- DnsReverse NAV START --}}
+                        <li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.dnsreverse.index') }}">
+                                <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
+                            </a>
+                        </li>
+                        {{-- DnsReverse NAV END --}}
+BLADE
+)
+        awk -v block="$NAV_ADMIN" '
+            { print }
+            /route\(.admin\.nodes.\)/ { encontrado = 1 }
+            encontrado && /<\/li>/ { print block; encontrado = 0 }
+        ' "$PANEL/resources/views/layouts/admin.blade.php" > /tmp/dnsrev-admin.tmp \
+            && mv /tmp/dnsrev-admin.tmp "$PANEL/resources/views/layouts/admin.blade.php"
+
+        if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
+            ok "Entrada anadida al menu del admin"
+        else
+            warn "No se pudo anadir la entrada al menu del admin."
+            warn "Entra directamente a /admin/dnsreverse"
+        fi
     fi
 fi
 

@@ -6,7 +6,8 @@
 #  subdominio tuyo a su servidor.
 #
 #  LO IMPORTANTE:
-#    - NO recompila el frontend (nada de yarn ni webpack).
+#    - NO inyecta nada en las paginas del panel. El boton del cliente es una
+#      pantalla mas de React, compilada con el panel (como la original).
 #    - NO reemplaza ningun archivo del panel ni del tema.
 #    - NO borra ningun DNS. Si ya tenias la version antigua instalada, los
 #      dominios de tus clientes siguen donde estaban y aparecen solos.
@@ -157,9 +158,34 @@ title "5. Ajustando permisos"
 
 bash "$AQUI/permissions.sh" "$PANEL" || warn "Algunos permisos no se pudieron ajustar (vuelve a lanzarlo con sudo)"
 
-# --- 6. Comprobacion final --------------------------------------------------
+# --- 6. La pantalla del cliente y el boton del admin ------------------------
+#
+# Aqui no se inyecta nada en las paginas del panel. El boton del cliente es una
+# pantalla mas de React que se compila con el panel, igual que hacia la
+# extension original, y el del admin es un <li> de Blade.
 
-title "6. Comprobacion final"
+title "6. Pantalla del cliente y botones"
+
+if [ "${DNSREVERSE_SIN_FRONTEND:-0}" = "1" ]; then
+    warn "Te saltas la compilacion (DNSREVERSE_SIN_FRONTEND=1)."
+    warn "Tus clientes no veran el boton hasta que lances:"
+    printf '      sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
+elif ! command -v yarn >/dev/null 2>&1 && ! command -v npm >/dev/null 2>&1; then
+    warn "No hay yarn ni npm: no se puede compilar la pantalla del cliente."
+    warn "Instala yarn y lanza:  sudo bash $AQUI/install-frontend.sh $PANEL"
+else
+    if bash "$AQUI/install-frontend.sh" "$PANEL"; then
+        ok "Pantalla del cliente compilada y botones puestos"
+    else
+        warn "No se pudo compilar la pantalla del cliente."
+        warn "El area de administracion funciona igual. Para reintentarlo:"
+        printf '      sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
+    fi
+fi
+
+# --- 7. Comprobacion final --------------------------------------------------
+
+title "7. Comprobacion final"
 
 php artisan dnsreverse:doctor || true
 
@@ -171,32 +197,6 @@ printf '\n%s  Instalacion terminada%s\n' "$G$B" "$N"
 printf '  ---------------------------------------------------------------\n'
 printf '  Panel de la extension:  %s/admin/dnsreverse\n' "${PANEL_URL:-https://TU-PANEL}"
 printf '\n'
-
-# Si el cliente usaba el modo nativo (boton compilado dentro del panel), una
-# actualizacion del panel se lleva por delante tanto routes.ts como los
-# archivos compilados. Aqui se detecta y se avisa, porque si no el cliente se
-# queda sin ver la pantalla y no sabe por que.
-MODO_NATIVO=0
-
-if [ -f "$PANEL/resources/scripts/components/server/dnsreverse/DnsReverseContainer.tsx" ] \
-   || grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null; then
-    MODO_NATIVO=1
-fi
-
-if [ "$MODO_NATIVO" -eq 0 ] && php "$PANEL/artisan" dnsreverse:ui 2>/dev/null | grep -q 'nativo'; then
-    printf '  %sAVISO:%s la extension esta en modo nativo pero el panel ya no lo tiene\n' "$Y$B" "$N"
-    printf '  puesto (lo habra borrado una actualizacion del panel). Tus clientes NO\n'
-    printf '  veran la pantalla hasta que hagas una de estas dos cosas:\n'
-    printf '\n'
-    printf '    a) volver a compilarlo:   sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
-    printf '    b) usar el modo inyectado, que no necesita compilar:\n'
-    printf '                              cd %s && php artisan dnsreverse:ui inject\n' "$PANEL"
-    printf '\n'
-elif [ "$MODO_NATIVO" -eq 1 ]; then
-    printf '  Modo nativo detectado: recuerda recompilar el panel cuando lo actualices\n'
-    printf '      sudo bash %s/install-frontend.sh %s\n' "$AQUI" "$PANEL"
-    printf '\n'
-fi
 
 printf '  Siguientes pasos:\n'
 printf '    1. Dominios -> Anadir dominio, con su token de Cloudflare\n'

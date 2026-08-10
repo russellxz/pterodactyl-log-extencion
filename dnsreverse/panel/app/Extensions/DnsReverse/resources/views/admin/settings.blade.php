@@ -39,29 +39,6 @@
                         </p>
                     </div>
 
-                    <div class="dnsreverse-checkfield">
-                        <input type="checkbox" id="dnsrevPantallaCliente" name="client_ui_enabled" value="1"
-                               {{ filter_var($ajustes['client_ui_enabled'], FILTER_VALIDATE_BOOLEAN) ? 'checked' : '' }}>
-                        <label for="dnsrevPantallaCliente">Poner el boton del cliente sin compilar (modo inyectado)</label>
-                        <p class="text-muted small">
-                            <strong>Marcado (recomendado):</strong> el boton "DNS Reverse" se anade a las paginas del
-                            cliente desde el servidor. No hay que compilar nada y aguanta las actualizaciones del panel.
-                            <br>
-                            <strong>Desmarcado:</strong> en el area de cliente no se carga <strong>ni una linea</strong>
-                            de esta extension. Solo debes desmarcarlo si has compilado el boton dentro del panel
-                            (<code>install-frontend.sh</code>); si no, tus clientes se quedan sin pantalla.
-                            <br>
-                            Los DNS ya creados y esta pantalla de administracion no se ven afectados en ningun caso.
-                        </p>
-                        @if (!filter_var($ajustes['client_ui_enabled'], FILTER_VALIDATE_BOOLEAN))
-                            <p class="text-muted small">
-                                <strong>Estas en modo nativo.</strong> Recuerda volver a compilar despues de cada
-                                actualizacion del panel, o el boton desaparecera:
-                                <code>sudo bash install-frontend.sh</code>. Para comprobarlo:
-                                <code>php artisan dnsreverse:doctor</code>.
-                            </p>
-                        @endif
-                    </div>
                 </div>
             </div>
 

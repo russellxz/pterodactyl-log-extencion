@@ -50,7 +50,6 @@ class SettingsController extends Controller
             'letsencrypt_enabled' => $request->boolean('letsencrypt_enabled') ? '1' : '0',
             'letsencrypt_auto_renew' => $request->boolean('letsencrypt_auto_renew') ? '1' : '0',
             'allow_custom_domains' => $request->boolean('allow_custom_domains') ? '1' : '0',
-            'client_ui_enabled' => $request->boolean('client_ui_enabled') ? '1' : '0',
         ]);
 
         DnsEvent::record('info', 'settings.update', 'Configuracion guardada');

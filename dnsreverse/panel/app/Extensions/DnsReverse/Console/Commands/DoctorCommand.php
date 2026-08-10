@@ -145,41 +145,46 @@ class DoctorCommand extends Command
     {
         $this->seccion('Pantalla del cliente');
 
-        $inyectado = $settings->bool('client_ui_enabled');
+        // El boton es una pantalla mas del panel, compilada con el. No se
+        // inyecta nada en ninguna pagina, asi que lo unico que hay que
+        // comprobar es que el componente este puesto y la ruta registrada.
         $componente = base_path('resources/scripts/components/server/dnsreverse/DnsReverseContainer.tsx');
+        $enExtensiones = base_path('resources/scripts/components/server/extensions/dnsreverse/route.tsx');
         $rutas = base_path('resources/scripts/routers/routes.ts');
-        $compilado = is_file($componente)
+
+        $porCarpetaDeExtensiones = is_file($enExtensiones);
+        $porRoutesTs = is_file($componente)
             && is_file($rutas)
             && str_contains((string) @file_get_contents($rutas), 'dnsreverse:inicio');
 
-        if ($inyectado && !$compilado) {
-            $this->bien('Modo inyectado: el boton lo pone el panel, sin compilar nada');
-            $this->arix($compilado);
+        $compilado = $porCarpetaDeExtensiones || $porRoutesTs;
 
-            return;
-        }
-
-        if (!$inyectado && $compilado) {
-            $this->bien('Modo nativo: el boton esta compilado dentro del panel');
-            $this->aviso('Acuerdate de volver a compilar despues de cada actualizacion del panel (install-frontend.sh).');
-            $this->arix($compilado);
-
-            return;
-        }
-
-        if (!$inyectado && !$compilado) {
+        if (!$compilado) {
             $this->mal(
-                'Tus clientes NO ven la pantalla: el modo inyectado esta apagado y no hay nada compilado.',
-                'php artisan dnsreverse:ui inject   (o vuelve a lanzar install-frontend.sh)'
+                'Tus clientes NO ven la pantalla: falta compilarla en el panel.',
+                'sudo bash install-frontend.sh   (o vuelve a lanzar install.sh)'
             );
-            $this->arix($compilado);
 
             return;
         }
 
-        $this->aviso('El boton puede salir dos veces: hay codigo compilado y ademas el modo inyectado encendido.');
-        $this->line('          arreglo: php artisan dnsreverse:ui native');
-        $this->arix($compilado);
+        if ($porCarpetaDeExtensiones) {
+            $this->bien('El boton sale de la carpeta de extensiones del tema Arix');
+        } else {
+            $this->bien('El boton esta registrado en routes.ts del panel');
+        }
+
+        $compilados = glob(base_path('public/assets/*.js')) ?: [];
+
+        if ($compilados === []) {
+            $this->mal('No hay frontend compilado en public/assets.', 'cd ' . base_path() . ' && yarn build:production');
+        } else {
+            $this->bien('Frontend compilado (' . count($compilados) . ' archivos)');
+        }
+
+        $this->aviso('Al actualizar el panel o el tema hay que volver a compilar, o el boton desaparece.');
+
+        $this->arix($compilado, $porCarpetaDeExtensiones);
     }
 
     /**
@@ -187,9 +192,17 @@ class DoctorCommand extends Command
      * sino de una lista de enlaces guardada en la base de datos. Aqui se
      * comprueba que las dos mitades esten de acuerdo.
      */
-    private function arix(bool $compilado): void
+    private function arix(bool $compilado, bool $porCarpeta = false): void
     {
         if (!ArixTheme::instalado()) {
+            return;
+        }
+
+        // Si la pantalla esta en el hueco de extensiones del tema, el boton lo
+        // pinta el tema solo: no hace falta ningun enlace en su lista.
+        if ($porCarpeta) {
+            $this->bien('Arix lo recoge de su carpeta de extensiones: no hace falta nada mas');
+
             return;
         }
 
