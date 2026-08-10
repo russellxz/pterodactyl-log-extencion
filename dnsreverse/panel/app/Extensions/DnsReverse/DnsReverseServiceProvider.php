@@ -3,10 +3,8 @@
 namespace Pterodactyl\Extensions\DnsReverse;
 
 use Illuminate\Console\Scheduling\Schedule;
-use Illuminate\Contracts\Http\Kernel as HttpKernel;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
-use Pterodactyl\Extensions\DnsReverse\Http\Middleware\InjectAssets;
 use Pterodactyl\Extensions\DnsReverse\Listeners\ServerCreatedListener;
 use Pterodactyl\Extensions\DnsReverse\Services\ProxyManager;
 use Pterodactyl\Extensions\DnsReverse\Support\Settings;
@@ -53,7 +51,6 @@ class DnsReverseServiceProvider extends ServiceProvider
 
         $this->registerBladeDirectives();
         $this->registerRoutes();
-        $this->registerMiddleware();
         $this->registerCommands();
         $this->registerListeners();
         $this->registerSchedule();
@@ -98,12 +95,6 @@ class DnsReverseServiceProvider extends ServiceProvider
             ->group(__DIR__ . '/routes/client.php');
     }
 
-    private function registerMiddleware(): void
-    {
-        if (!$this->app->runningInConsole()) {
-            $this->app->make(HttpKernel::class)->pushMiddleware(InjectAssets::class);
-        }
-    }
 
     private function registerCommands(): void
     {
@@ -117,7 +108,6 @@ class DnsReverseServiceProvider extends ServiceProvider
             Console\Commands\DoctorCommand::class,
             Console\Commands\SyncCommand::class,
             Console\Commands\RenewCertificatesCommand::class,
-            Console\Commands\UiModeCommand::class,
             Console\Commands\ArixLinkCommand::class,
         ]);
     }

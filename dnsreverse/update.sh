@@ -78,14 +78,14 @@ fi
 # trae una version nueva del componente y hay que volver a compilar. Se hace
 # solo para no dejar al cliente con la pantalla vieja.
 
-if grep -q 'dnsreverse:inicio' "$PANEL/resources/scripts/routers/routes.ts" 2>/dev/null; then
-    title "3. Recompilando el panel (tenias el modo nativo)"
+if [ "${DNSREVERSE_SIN_FRONTEND:-0}" != "1" ]; then
+    title "3. Recompilando la pantalla del cliente"
 
     if ! bash "$AQUI/install-frontend.sh" "$PANEL"; then
         err "No se pudo recompilar el frontend."
-        printf '  La extension SI esta actualizada. Mientras tanto, para que tus\n'
-        printf '  clientes no se queden sin pantalla:\n'
-        printf '      cd %s && php artisan dnsreverse:ui inject\n\n' "$PANEL"
+        printf '  La extension SI esta actualizada y el area de administracion\n'
+        printf '  funciona. Lo unico pendiente es la pantalla del cliente:\n'
+        printf '      sudo bash %s/install-frontend.sh %s\n\n' "$AQUI" "$PANEL"
         exit 1
     fi
 fi

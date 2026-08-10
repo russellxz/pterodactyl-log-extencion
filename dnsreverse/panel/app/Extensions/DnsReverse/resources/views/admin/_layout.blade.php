@@ -29,6 +29,15 @@
 @endsection
 
 @section('content')
+    {{--
+        El css de la extension se carga AQUI, en su propia pantalla.
+
+        Antes lo metia un middleware en todas las paginas del panel. Eso es
+        inyectar, y es justo lo que causaba el conflicto con Cloudflare. Ahora
+        no se toca ni una pagina que no sea de DNS Reverse.
+    --}}
+    <link rel="stylesheet" href="/extensions/dnsreverse/admin.css?v={{ \Pterodactyl\Extensions\DnsReverse\DnsReverseServiceProvider::VERSION }}">
+
     <div class="row">
         <div class="col-xs-12">
             <nav class="dnsreverse-tabs">
@@ -64,5 +73,6 @@
 
 @section('footer-scripts')
     @parent
+    <script src="/extensions/dnsreverse/admin.js?v={{ \Pterodactyl\Extensions\DnsReverse\DnsReverseServiceProvider::VERSION }}"></script>
     @yield('dnsreverse-scripts')
 @endsection

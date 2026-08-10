@@ -16,7 +16,7 @@ solo archivo del panel**, asi que ya no desaparece cada vez que actualizas.
 - [Que cambia respecto a la version anterior](#que-cambia-respecto-a-la-version-anterior)
 - [Antes de empezar](#antes-de-empezar)
 - [Instalacion](#instalacion)
-- [Los dos modos del boton del cliente](#los-dos-modos-del-boton-del-cliente)
+- [Como sale el boton del cliente](#como-sale-el-boton-del-cliente)
 - [Actualizar](#actualizar)
 - [Desinstalar](#desinstalar)
 - [Que pasa cuando actualizo el panel](#que-pasa-cuando-actualizo-el-panel)
@@ -33,7 +33,7 @@ solo archivo del panel**, asi que ya no desaparece cada vez que actualizas.
 
 | | Version anterior | DNS Reverse |
 |---|---|---|
-| Instalacion | Editar ~20 archivos del panel a mano + `yarn build` | Un script, sin tocar el panel y sin recompilar nada (el `yarn build` sigue disponible como [modo nativo](#los-dos-modos-del-boton-del-cliente)) |
+| Instalacion | Editar ~20 archivos del panel a mano + `yarn build` | Un script que lo hace todo, incluido el `yarn build` |
 | Al actualizar el panel | Desaparece y hay que rehacerlo todo | Se recupera con un comando; los datos no se tocan |
 | Tokens de Cloudflare | **Uno solo** para todos los dominios | **Uno por dominio**: puedes mezclar varias cuentas |
 | Certificados de origen | **Uno solo** para todos | **Uno por dominio** |
@@ -177,139 +177,56 @@ cd /var/www/pterodactyl && php artisan dnsreverse:doctor
 
 ---
 
-## Los dos modos del boton del cliente
+## Como sale el boton del cliente
 
-El boton **DNS Reverse** que ven tus clientes en el menu de su servidor puede
-salir de dos sitios. La pantalla es exactamente la misma en los dos casos; lo
-unico que cambia es de donde viene el boton.
+**No se inyecta nada.** El boton "DNS Reverse" es una pantalla mas del panel,
+compilada con el, igual que Consola o Archivos. Es como lo hacia la extension
+original, y es lo que evita el conflicto con la pantalla de carga de Cloudflare.
 
-|                                     | Modo inyectado *(por defecto)* | Modo nativo *(`yarn build`)* |
-| ----------------------------------- | ------------------------------ | ---------------------------- |
-| Hay que compilar                    | No                             | Si, varios minutos y ~2 GB de RAM |
-| Aguanta una actualizacion del panel | Si                             | No, hay que recompilar       |
-| Anade algo a las paginas del panel  | Si, una etiqueta al final      | No, nada                     |
-| Toca archivos del panel             | Ninguno                        | `resources/scripts/routers/routes.ts` |
-| Con el tema Arix                    | Igual, sin hacer nada          | Ademas se anade un enlace en su menu (se hace solo) |
-| Se instala en                       | 10 segundos                    | 5-10 minutos                 |
+Lo hace solo `install.sh`, no tienes que lanzar nada aparte. Segun lo que
+encuentre:
 
-**Cual elegir:** si no tienes ningun problema, dejalo como esta (inyectado): es
-lo que menos mantenimiento da. El modo nativo es para cuando quieres que el
-panel salga por el cable **exactamente** como lo publica Pterodactyl, sin una
-sola linea anadida: es como lo hacia la extension antigua.
+| Si tienes | Que hace |
+|---|---|
+| **Tema Arix preparado** (con `resources/scripts/components/server/extensions/`) | Deja ahi la pantalla. Salen la pagina **y el boton** sin tocar `routes.ts` ni la base de datos. |
+| **Panel normal o Arix sin preparar** | Componente + entrada en `routes.ts`, como la extension original. En Arix ademas anade el enlace a su lista. |
 
-### Activar el modo nativo
+En los dos casos termina con `yarn build:production`.
 
-```bash
-sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install-frontend.sh
-```
+El boton del **area de administracion** es un `<li>` de Blade: sale al momento
+y no hay que compilar nada para el.
 
-Lo que hace, por orden:
+### Que se carga en cada pagina
 
-1. Comprueba que estan `node` y `yarn` (**si falta alguno, se para sin tocar nada**).
-2. Copia la pantalla a `resources/scripts/components/server/dnsreverse/`.
-3. Anade la ruta a `routes.ts`, entre marcas `// dnsreverse:inicio` y
-   `// dnsreverse:fin`, y guarda una copia del archivo original al lado.
-4. **Guarda una copia de `public/assets`** en `storage/dnsreverse-frontend-<fecha>`.
-5. Compila (`yarn build:production`).
-6. Apaga el modo inyectado para que el boton no salga dos veces.
+| Pagina | Que anade la extension |
+|---|---|
+| Portada, cuenta, lista de servidores | **nada** |
+| Dentro de un servidor | **nada** (el boton viene compilado) |
+| Cualquier pantalla del admin | **nada** |
+| `/admin/dnsreverse` (su propia pantalla) | su css y su js |
 
-> **Si la compilacion falla, el panel se queda como estaba.** Se devuelve
-> `public/assets` desde la copia, se deshace el parche de `routes.ts` y se borra
-> el componente. En ningun momento se queda el panel en blanco.
+Comprobado midiendolo: 0 etiquetas anadidas en todas las paginas del panel, y
+solo su propia pantalla carga sus recursos.
 
-### Despues de CADA actualizacion del panel
+### Despues de actualizar el panel o el tema
 
-La actualizacion de Pterodactyl reemplaza `routes.ts` y los archivos compilados,
-asi que el boton desaparece. Hay que volver a ponerlo:
+Las dos cosas reemplazan lo compilado, asi que el boton del cliente desaparece.
+Se recupera con:
 
 ```bash
 cd /opt/pterodactyl-log-extencion && git pull
 sudo bash dnsreverse/install.sh
-sudo bash dnsreverse/install-frontend.sh
 ```
 
-**Tus DNS no se tocan en ningun momento.** Lo unico que se pierde al actualizar
-el panel es el boton, y estos dos comandos lo devuelven.
+Tus DNS no se tocan en ningun momento. Y `php artisan dnsreverse:doctor` te
+avisa cuando pasa.
 
-Si un dia no puedes o no quieres recompilar, tienes la salida rapida: vuelve al
-modo inyectado y los clientes recuperan la pantalla al instante.
+Si tienes prisa y no quieres compilar en ese momento, puedes instalar solo la
+parte del panel y dejar la pantalla del cliente para luego:
 
 ```bash
-cd /var/www/pterodactyl && php artisan dnsreverse:ui inject
+sudo DNSREVERSE_SIN_FRONTEND=1 bash dnsreverse/install.sh
 ```
-
-### Volver al modo inyectado del todo
-
-```bash
-sudo bash /opt/pterodactyl-log-extencion/dnsreverse/install-frontend.sh --remove
-```
-
-Quita el componente, devuelve `routes.ts` a como lo trae Pterodactyl, recompila
-y vuelve a encender el modo inyectado.
-
-### Ver en que modo estas
-
-```bash
-cd /var/www/pterodactyl && php artisan dnsreverse:ui
-```
-
-`php artisan dnsreverse:doctor` tambien lo comprueba y avisa de los dos casos
-raros: modo nativo apuntado pero sin compilar (los clientes no ven nada), y los
-dos modos encendidos a la vez (el boton saldria dos veces).
-
-### Con el tema Arix
-
-Arix pone sus apartados de otra forma, y conviene saberlo:
-
-**El menu del cliente de Arix NO sale de `routes.ts`.** Sale de una lista de
-enlaces que el tema guarda en la base de datos (en la tabla `settings`, clave
-`settings::arix:links`), la misma que se edita en *Admin -> Arix -> Links*.
-`routes.ts` solo sirve para que la pagina exista; quien decide que botones se
-ven es esa lista.
-
-O sea que en Arix hacen falta **dos mitades**:
-
-| Mitad | Donde | Que hace |
-|---|---|---|
-| La ruta | `resources/scripts/routers/routes.ts` | que la pagina exista |
-| El enlace | `settings::arix:links` (base de datos) | que el boton se vea |
-
-`install-frontend.sh` detecta Arix y pone las dos solo. El enlace queda asi:
-
-```php
-[
-    'icon'       => 'HiOutlineGlobeAlt',   // icono de react-icons/hi
-    'name'       => 'DNS Reverse',
-    'url'        => '/dnsreverse',         // relativo a /server/{id}
-    'permission' => [],                    // vacio: lo ve todo el mundo
-    'nests' => [], 'eggs' => [], 'active' => true,
-]
-```
-
-Se anade al grupo **management**, junto a Archivos, Bases de datos y Red. Queda
-como un enlace mas del tema, asi que desde *Admin -> Arix -> Links* lo puedes
-mover de grupo, cambiarle el icono, el nombre o limitarlo a ciertos tipos de
-servidor. Y como todos los diseños del tema (barra lateral, pill, slim, iconos)
-y su buscador leen la misma lista, con eso sale en todos.
-
-Si ya tenias el menu personalizado, no se toca nada de lo tuyo: el enlace se
-anade al final del ultimo grupo y el resto se queda tal cual.
-
-Ponerlo o quitarlo a mano:
-
-```bash
-cd /var/www/pterodactyl
-php artisan dnsreverse:arix          # ver si esta puesto
-php artisan dnsreverse:arix add      # ponerlo
-php artisan dnsreverse:arix remove   # quitarlo
-```
-
-> **Ojo con `php artisan arix install`.** Ese comando del tema hace
-> `rsync` de sus archivos sobre el panel y recompila, asi que se lleva por
-> delante `routes.ts` (el enlace del menu sobrevive, porque esta en la base de
-> datos). Resultado: el boton se ve pero al pulsarlo sale "no encontrado".
-> `dnsreverse:doctor` te lo dice tal cual. Se arregla volviendo a lanzar
-> `install-frontend.sh`.
 
 ---
 
@@ -413,26 +330,18 @@ asi que **no gasta cupo de Let's Encrypt**.
 > wings, ejecutas `dnsreverse:sync` y todos los dominios de ese nodo vuelven a
 > montarse solos.
 
-### Si usas el modo nativo
+### El boton del cliente
 
-Ahi la actualizacion se lleva ademas `routes.ts` y los archivos compilados, asi
-que el boton del cliente desaparece. Hay que recompilar:
+La actualizacion se lleva por delante lo compilado, asi que el boton
+desaparece. Hay que volver a instalar:
 
 ```bash
 cd /opt/pterodactyl-log-extencion && git pull
 sudo bash dnsreverse/install.sh
-sudo bash dnsreverse/install-frontend.sh
 ```
 
-`install.sh` te avisa el solo cuando detecta este caso, y `dnsreverse:doctor`
-tambien. Tus DNS siguen intactos: lo unico que se pierde es el boton.
-
-Si no quieres recompilar ahora mismo, vuelve al modo inyectado y los clientes
-recuperan la pantalla al instante:
-
-```bash
-cd /var/www/pterodactyl && php artisan dnsreverse:ui inject
-```
+Tus DNS siguen intactos: lo unico que se pierde es el boton, y
+`php artisan dnsreverse:doctor` te lo dice.
 
 ---
 
@@ -668,9 +577,6 @@ Todos se ejecutan desde la carpeta del panel (`cd /var/www/pterodactyl`).
 | `php artisan dnsreverse:renew --days=45 --force` | Renueva con mas margen, aunque la automatica este apagada. |
 | `php artisan dnsreverse:uninstall` | Informa de lo que hay guardado. Por defecto **no borra nada**. |
 | `php artisan dnsreverse:uninstall --borrar-config` | Borra dominios, tokens, certificados y ajustes. |
-| `php artisan dnsreverse:ui` | Dice si el boton del cliente esta en modo inyectado o nativo. |
-| `php artisan dnsreverse:ui inject` | Vuelve al modo inyectado (sin compilar). Es la salida rapida. |
-| `php artisan dnsreverse:ui native` | Marca el modo nativo (solo si ya compilaste con `install-frontend.sh`). |
 | `php artisan dnsreverse:arix` | Con el tema Arix: dice si el enlace esta en su menu. |
 | `php artisan dnsreverse:arix add` | Anade el enlace al menu del tema Arix. |
 | `php artisan dnsreverse:arix remove` | Lo quita del menu del tema Arix. |
@@ -680,9 +586,8 @@ Y los scripts, desde la carpeta del repositorio:
 | Script | Donde | Para que |
 |---|---|---|
 | `sudo bash dnsreverse/install.sh` | panel | Instalar o reinstalar |
-| `sudo bash dnsreverse/update.sh` | panel | Actualizar (recompila solo si estabas en modo nativo) |
-| `sudo bash dnsreverse/install-frontend.sh` | panel | Compilar el boton dentro del panel (modo nativo) |
-| `sudo bash dnsreverse/install-frontend.sh --remove` | panel | Deshacer el modo nativo y volver al inyectado |
+| `sudo bash dnsreverse/update.sh` | panel | Actualizar |
+| `sudo bash dnsreverse/install-frontend.sh` | panel | Solo la pantalla del cliente (lo hace ya `install.sh`) |
 | `sudo bash dnsreverse/uninstall.sh` | panel | Desinstalar sin perder datos |
 | `sudo bash dnsreverse/permissions.sh` | panel | Repasar permisos |
 | `sudo bash dnsreverse/wings/install-wings.sh` | **nodo** | Instalar o actualizar el complemento de wings |
@@ -716,17 +621,14 @@ Primero: la entrada sale **dentro de un servidor**, en la barra de secciones
 (Consola, Archivos, Bases de datos...). En la lista de servidores no aparece,
 porque ahi todavia no se sabe de que servidor se trata.
 
-Si dentro de un servidor tampoco sale, lo primero es ver **en que modo estas**,
-porque el sitio donde mirar cambia:
+Si dentro de un servidor tampoco sale, lo primero:
 
 ```bash
 cd /var/www/pterodactyl && php artisan dnsreverse:doctor
 ```
 
-En el apartado *Pantalla del cliente* te lo dice, y avisa de los dos casos que
-dejan al cliente sin nada: modo nativo sin compilar, y los dos modos a la vez.
-
-Despues:
+En el apartado *Pantalla del cliente* te dice si esta compilada y de donde sale
+el boton. Despues:
 
 1. **Ctrl+F5** para tirar la cache del navegador.
 2. Comprueba que el limite de ese servidor no esta a **0**
@@ -734,26 +636,8 @@ Despues:
 3. Comprueba que su tipo de servidor no esta en *Desactivado*
    (*Admin -> DNS Reverse -> Tipos de servidor*).
 
-**Si estas en modo inyectado:**
-
-4. Comprueba que el archivo llega: abre
-   `https://TU-PANEL/extensions/dnsreverse/client.js`. Tiene que salir codigo,
-   no un error 404. Si da 404, vuelve a lanzar `install.sh`.
-5. Abre la consola del navegador (**F12 -> Consola**). La extension deja escrito
-   ahi que ha hecho:
-   - `entrada anadida a la barra del servidor` &rarr; esta puesta; si no la ves,
-     mira mas a la derecha en la barra (se puede desplazar).
-   - `todavia no se encuentra la barra del servidor, reintentando` &rarr; el tema
-     dibuja el menu de otra forma; lo reintenta cuando el panel vuelve a dibujar.
-   - Si no aparece **ningun** mensaje, el archivo no se esta cargando: repasa el
-     punto 4.
-
-**Si estas en modo nativo:**
-
-4. Vuelve a compilar: `sudo bash dnsreverse/install-frontend.sh`. Lo mas normal
-   es que hayas actualizado el panel y la actualizacion se lo llevara.
-5. Si no puedes compilar ahora, vuelve al modo inyectado y lo tienes al
-   instante: `php artisan dnsreverse:ui inject`.
+4. Vuelve a compilar: `sudo bash dnsreverse/install.sh`. Lo mas normal es que
+   hayas actualizado el panel o el tema, y eso se lleva lo compilado.
 
 **Si usas el tema Arix**, hay una tercera posibilidad: que falte el enlace en
 *su* menu, que va por separado de la ruta.
