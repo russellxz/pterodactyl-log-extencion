@@ -73,6 +73,5 @@
 
 @section('footer-scripts')
     @parent
-    <script src="/extensions/dnsreverse/admin.js?v={{ \Pterodactyl\Extensions\DnsReverse\DnsReverseServiceProvider::VERSION }}"></script>
     @yield('dnsreverse-scripts')
 @endsection
