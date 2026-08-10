@@ -152,22 +152,64 @@ else
     exit 1
 fi
 
-# El panel compila con webpack 4. A partir de node 17 hay que decirle a node que
-# use el openssl de siempre o la compilacion muere con ERR_OSSL_EVP_UNSUPPORTED.
-if [ "$NODE_MAYOR" -ge 17 ]; then
+# Los paneles 1.14 y 1.15 compilan con webpack 5, que NO necesita
+# --openssl-legacy-provider. Solo se pone si el panel trae webpack 4.
+if [ "$NODE_MAYOR" -ge 17 ] && grep -q '"webpack": *"\^\?4' "$PANEL/package.json" 2>/dev/null; then
     export NODE_OPTIONS="--openssl-legacy-provider ${NODE_OPTIONS:-}"
-    ok "node 17 o superior: se activa --openssl-legacy-provider"
+    ok "webpack 4 con node moderno: se activa --openssl-legacy-provider"
 fi
 
-# Compilar el panel pide memoria. Con menos de 2 GB libres suele morir por OOM.
+# --- Memoria ----------------------------------------------------------------
+#
+# Compilar el panel entero pide unos 2 GB. Si se le dice a node que puede usar
+# mas de la que hay, el sistema lo mata a mitad y la compilacion falla. Se mira
+# lo que hay de verdad y, si hace falta, se anade swap temporal.
 LIBRE_MB="$(free -m 2>/dev/null | awk '/^Mem:/ {print ($7 != "" ? $7 : $4)}')"
+SWAP_MB="$(free -m 2>/dev/null | awk '/^Swap:/ {print $2}')"
+SWAP_NUESTRA=""
 
-if [ -n "${LIBRE_MB:-}" ] && [ "$LIBRE_MB" -lt 1800 ]; then
-    warn "Solo hay ${LIBRE_MB} MB de RAM libre. Compilar el panel necesita unos 2 GB."
-    warn "Si la compilacion muere sola, anade memoria de intercambio (swap) y reintenta."
+if [ -n "${LIBRE_MB:-}" ] && [ "$LIBRE_MB" -lt 2200 ] \
+   && [ "${SWAP_MB:-0}" -lt 2000 ] \
+   && [ "${DNSREVERSE_SIN_SWAP:-0}" != "1" ] \
+   && command -v mkswap >/dev/null 2>&1; then
+
+    SWAP_NUESTRA="/swapfile-dnsreverse"
+
+    if [ ! -e "$SWAP_NUESTRA" ]; then
+        warn "Solo hay ${LIBRE_MB} MB de RAM libre. Se anade swap temporal de 4 GB."
+
+        if (fallocate -l 4G "$SWAP_NUESTRA" 2>/dev/null || dd if=/dev/zero of="$SWAP_NUESTRA" bs=1M count=4096 status=none 2>/dev/null) \
+           && chmod 600 "$SWAP_NUESTRA" && mkswap "$SWAP_NUESTRA" >/dev/null 2>&1 && swapon "$SWAP_NUESTRA" 2>/dev/null; then
+            ok "Swap temporal activada (se quita sola al terminar)"
+            LIBRE_MB=$((LIBRE_MB + 4096))
+        else
+            rm -f "$SWAP_NUESTRA"; SWAP_NUESTRA=""
+            warn "No se pudo crear la swap (¿contenedor?). Se compilara con lo que hay."
+        fi
+    else
+        SWAP_NUESTRA=""
+    fi
 fi
 
-export NODE_OPTIONS="--max-old-space-size=${DNSREVERSE_NODE_MEMORY:-2048} ${NODE_OPTIONS:-}"
+quitar_swap() {
+    if [ -n "${SWAP_NUESTRA:-}" ] && [ -e "$SWAP_NUESTRA" ]; then
+        swapoff "$SWAP_NUESTRA" 2>/dev/null && rm -f "$SWAP_NUESTRA" && ok "Swap temporal quitada" \
+            || warn "La swap sigue en uso; quitala luego:  sudo swapoff $SWAP_NUESTRA && sudo rm $SWAP_NUESTRA"
+    fi
+}
+trap 'quitar_swap' EXIT
+
+# Se le da a node como mucho el 75% de lo que hay, y nunca menos de 1536 MB.
+if [ -n "${LIBRE_MB:-}" ]; then
+    MEMORIA_NODE=$(( LIBRE_MB * 75 / 100 ))
+    [ "$MEMORIA_NODE" -lt 1536 ] && MEMORIA_NODE=1536
+    [ "$MEMORIA_NODE" -gt 4096 ] && MEMORIA_NODE=4096
+else
+    MEMORIA_NODE=2048
+fi
+
+export NODE_OPTIONS="--max-old-space-size=${DNSREVERSE_NODE_MEMORY:-$MEMORIA_NODE} ${NODE_OPTIONS:-}"
+ok "node compilara con ${DNSREVERSE_NODE_MEMORY:-$MEMORIA_NODE} MB de memoria"
 
 # --- Funciones de trabajo ---------------------------------------------------
 
@@ -211,14 +253,42 @@ dependencias() {
     ok "Dependencias listas"
 }
 
+REGISTRO_BUILD="$PANEL/storage/logs/dnsreverse-build-$SELLO.log"
+
 compilar() {
     warn "Compilando... tarda varios minutos, no cierres la terminal."
 
+    local resultado=0
+
     if [ "$GESTOR" = "yarn" ]; then
-        yarn build:production
+        yarn build:production > "$REGISTRO_BUILD" 2>&1 || resultado=1
     else
-        npm run build:production
+        npm run build:production > "$REGISTRO_BUILD" 2>&1 || resultado=1
     fi
+
+    if [ "$resultado" -eq 0 ]; then
+        return 0
+    fi
+
+    # Ensenar el motivo de verdad, no solo "exit code 1".
+    printf '\n'
+    err "La compilacion fallo. Esto es lo que dijo:"
+    printf '\n'
+
+    if grep -qE "heap out of memory|Allocation failed|Killed" "$REGISTRO_BUILD"; then
+        printf '      %sSe quedo sin memoria.%s\n\n' "$Y$B" "$N"
+        printf '      Anade swap y reintenta:\n'
+        printf '          sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile\n'
+        printf '          sudo mkswap /swapfile && sudo swapon /swapfile\n'
+    elif grep -q "ERROR in" "$REGISTRO_BUILD"; then
+        grep -A 3 "ERROR in" "$REGISTRO_BUILD" | head -25 | sed 's/^/          /'
+    else
+        grep -vE "^\s*$|warning |Browserslist|DeprecationWarning|^warn -" "$REGISTRO_BUILD" | tail -20 | sed 's/^/          /'
+    fi
+
+    printf '\n      Registro entero:  cat %s\n' "$REGISTRO_BUILD"
+
+    return 1
 }
 
 ajustar_permisos() {
@@ -346,12 +416,25 @@ title "5. Compilando el panel"
 
 guardar_assets
 
-if ! compilar; then
-    err "La compilacion fallo."
+deshacer_todo() {
     printf '\n  El panel NO se queda roto: se deja todo como estaba.\n'
     devolver_assets
-    php "$PARCHE" "$PANEL" --remove >/dev/null 2>&1
+    [ "$MODO_HUECO" -eq 1 ] || php "$PARCHE" "$PANEL" --remove >/dev/null 2>&1
     rm -rf "$DESTINO"
+    rm -f "$PANEL/resources/views/admin/extensions/dnsreverse.blade.php"
+}
+
+if ! compilar; then
+    deshacer_todo
+    exit 1
+fi
+
+# Aunque diga que fue bien, se comprueba que el frontend existe de verdad.
+# "yarn build:production" borra public/assets antes de empezar, asi que si algo
+# raro pasa y no genera nada, el panel se quedaria en blanco.
+if ! ls "$PANEL/public/assets/bundle."*.js >/dev/null 2>&1; then
+    err "La compilacion dijo que si, pero no hay frontend generado."
+    deshacer_todo
     exit 1
 fi
 
