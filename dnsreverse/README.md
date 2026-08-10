@@ -589,6 +589,7 @@ Y los scripts, desde la carpeta del repositorio:
 | `sudo bash dnsreverse/update.sh` | panel | Actualizar |
 | `sudo bash dnsreverse/install-frontend.sh` | panel | Solo la pantalla del cliente (lo hace ya `install.sh`) |
 | `sudo bash dnsreverse/uninstall.sh` | panel | Desinstalar sin perder datos |
+| `sudo bash dnsreverse/reinstalar-limpio.sh` | panel | Quitar la version antigua Y la nueva, y reinstalar de cero |
 | `sudo bash dnsreverse/permissions.sh` | panel | Repasar permisos |
 | `sudo bash dnsreverse/wings/install-wings.sh` | **nodo** | Instalar o actualizar el complemento de wings |
 
