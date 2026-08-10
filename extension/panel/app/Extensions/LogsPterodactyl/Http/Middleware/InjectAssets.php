@@ -9,25 +9,43 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Cuelga los recursos de la extension de las paginas HTML del panel.
+ * Cuelga el aviso de instalacion atascada en la pantalla del servidor.
  *
- * Se hace desde un middleware, y no editando las plantillas blade, por dos
- * motivos: el tema Arix reemplaza sus propias plantillas cada vez que se
- * instala o actualiza (y se llevaria por delante cualquier etiqueta que le
- * hubieramos metido), y asi la extension no deja ni una linea escrita en
- * archivos del panel.
+ * QUE HACE Y QUE YA NO HACE
+ * -------------------------
+ * Antes esta clase metia recursos en TODAS las paginas del panel: en el area
+ * de administracion colgaba un admin.js que construia la entrada del menu
+ * manipulando el DOM, y en el area de cliente colgaba el aviso en cualquier
+ * pagina, estuvieras donde estuvieras.
  *
- * Todo el trabajo sobre el DOM lo hace el JavaScript inyectado. Aqui no se
- * toca el HTML del tema, solo se anaden etiquetas antes de </body>, que es la
- * operacion mas inocua posible.
+ * Ya no:
+ *
+ *   - El menu del admin es un archivo blade de verdad, que pone el instalador
+ *     (en el hueco del tema o como <li> en la plantilla). Aqui no se toca NADA
+ *     del area de administracion.
+ *   - El aviso del cliente solo se cuelga en /server/<id>, que es la unica
+ *     pantalla donde puede salir. En el resto del panel (cuenta, ajustes,
+ *     listado de servidores...) no se anade ni una etiqueta.
+ *
+ * Lo que queda es lo minimo imprescindible: dos etiquetas antes de </body> en
+ * la pantalla de un servidor. No hay ningun MutationObserver ni ningun bucle
+ * rastreando la pagina, que es lo que disparaba la CPU del navegador y hacia
+ * que Cloudflare tomara al cliente por un bot.
+ *
+ * Sigue siendo un middleware y no una plantilla porque el area de cliente es
+ * una aplicacion React: su HTML lo genera el propio panel y el tema Arix
+ * reemplaza esas plantillas cada vez que se instala o actualiza.
  */
 class InjectAssets
 {
     /**
      * Prefijos que nunca se tocan: son APIs, descargas o el propio wings.
+     *
+     * "admin/" esta aqui a proposito: el menu del area de administracion ya no
+     * se inyecta, lo pone el instalador como blade.
      */
     private const SKIP_PREFIXES = [
-        'api/', 'daemon/', 'locales/', 'sw.js', 'manifest.json',
+        'api/', 'daemon/', 'locales/', 'sw.js', 'manifest.json', 'admin/', 'admin',
     ];
 
     public function handle(Request $request, \Closure $next): mixed
@@ -66,8 +84,7 @@ class InjectAssets
             return $response;
         }
 
-        $isAdmin = $request->is('admin') || $request->is('admin/*');
-        $tags = $isAdmin ? $this->adminTags() : $this->clientTags($request);
+        $tags = $this->clientTags($request);
 
         if ($tags === '') {
             return $response;
@@ -114,19 +131,16 @@ class InjectAssets
             }
         }
 
+        // SOLO la pantalla de un servidor. Es donde puede salir el aviso de
+        // instalacion atascada, asi que es la unica que necesita el script.
+        // El resto del panel se queda exactamente como lo sirve Pterodactyl.
+        if (!preg_match('#^server/[a-zA-Z0-9-]{4,40}(/|$)#', $path)) {
+            return false;
+        }
+
         // El usuario tiene que estar autenticado: no se inyecta nada en la
         // pantalla de login ni en paginas publicas.
         return (bool) $request->user();
-    }
-
-    private function adminTags(): string
-    {
-        $base = $this->assetBase();
-
-        return implode('', [
-            '<link data-logspterodactyl="1" rel="stylesheet" href="' . $base . '/admin.css?v=' . $this->version() . '">',
-            '<script data-logspterodactyl="1" src="' . $base . '/admin.js?v=' . $this->version() . '" defer></script>',
-        ]);
     }
 
     private function clientTags(Request $request): string

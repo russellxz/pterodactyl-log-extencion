@@ -115,7 +115,31 @@ else
     fi
 fi
 
-# --- 3. Borrar los archivos -------------------------------------------------
+# --- 3. Quitar la entrada del menu del admin --------------------------------
+#
+# ESTO VA PRIMERO, ANTES DE BORRAR NADA. La entrada llama a
+# route('admin.logspterodactyl.index') y sin la extension esa ruta no existe:
+# si el archivo se quedara puesto, el area de administracion ENTERA daria
+# error 500. Los dos sitios donde puede estar se limpian por separado, porque
+# no todos los paneles tienen la plantilla del menu.
+
+rm -f "$PANEL/resources/views/admin/extensions/logspterodactyl.blade.php" \
+    && ok "Entrada del menu del admin retirada (hueco del tema)" || true
+
+if grep -q 'LogsPterodactyl NAV' "$PANEL/resources/views/layouts/admin.blade.php" 2>/dev/null; then
+    php -r '
+        $f = $argv[1];
+        $s = file_get_contents($f);
+        $s = preg_replace("/[ \t]*\{\{--\s*LogsPterodactyl NAV START.*?LogsPterodactyl NAV END\s*--\}\}\R?/s", "", $s);
+        file_put_contents($f, $s);
+    ' "$PANEL/resources/views/layouts/admin.blade.php" \
+        && ok "Entrada del menu retirada de la plantilla" \
+        || warn "No se pudo quitar la entrada del menu. Quitala a mano en resources/views/layouts/admin.blade.php"
+fi
+
+php artisan view:clear >/dev/null 2>&1 || true
+
+# --- 4. Borrar los archivos -------------------------------------------------
 
 rm -rf "$PANEL/app/Extensions/LogsPterodactyl" && ok "Codigo borrado" || err "No se pudo borrar app/Extensions/LogsPterodactyl"
 rm -rf "$PANEL/public/extensions/logspterodactyl" && ok "Recursos publicos borrados" || err "No se pudo borrar public/extensions/logspterodactyl"
@@ -128,7 +152,7 @@ rmdir "$PANEL/public/extensions" 2>/dev/null || true
 # La copia de seguridad de config/app.php que hizo el instalador ya no sirve.
 rm -f "$PANEL/config/app.php.logspterodactyl-backup" "$PANEL/config/app.php.logspterodactyl-antes-de-desinstalar"
 
-# --- 4. Limpiar caches ------------------------------------------------------
+# --- 5. Limpiar caches ------------------------------------------------------
 
 rm -f "$PANEL"/bootstrap/cache/config.php "$PANEL"/bootstrap/cache/services.php "$PANEL"/bootstrap/cache/packages.php 2>/dev/null
 

@@ -55,11 +55,21 @@ class DoctorCommand extends Command
             }
         }
 
-        // 3. Archivos publicos.
-        foreach (['client.js', 'client.css', 'admin.js', 'admin.css'] as $asset) {
+        // 3. Archivos publicos. Ya no hay admin.js: la entrada del menu del
+        //    admin es un blade de verdad, no un script que toca el DOM.
+        foreach (['client.js', 'client.css', 'admin.css'] as $asset) {
             $path = public_path('extensions/logspterodactyl/' . $asset);
             $problems += $this->check(is_file($path), 'Recurso publico ' . $asset, 'Falta ' . $path . '. Vuelve a ejecutar install.sh');
         }
+
+        // 3b. Entrada del menu del admin: o esta en el hueco del tema, o esta
+        //     metida en la plantilla. Si no esta en ninguno, no sale el boton.
+        $problems += $this->check(
+            is_file(resource_path('views/admin/extensions/logspterodactyl.blade.php'))
+                || str_contains((string) @file_get_contents(resource_path('views/layouts/admin.blade.php')), 'LogsPterodactyl NAV'),
+            'Entrada en el menu del area de administracion',
+            'No sale el boton en el menu. Vuelve a ejecutar install.sh, o entra directamente a /admin/logspterodactyl'
+        );
 
         // 4. Carpeta de logs legible.
         $problems += $this->check(

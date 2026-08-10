@@ -210,15 +210,55 @@ app/Extensions/LogsPterodactyl/          <- todo el codigo
 public/extensions/logspterodactyl/       <- css, js y logos
 ```
 
-La unica linea que se escribe fuera de ahi es el registro del proveedor en
-`config/app.php`, que el instalador anade entre marcas y el desinstalador
-quita dejando el archivo **byte a byte** como estaba.
+Fuera de ahi solo se escriben dos cosas, las dos entre marcas y las dos las
+quita el desinstalador dejando el archivo **byte a byte** como estaba:
+
+- el registro del proveedor en `config/app.php`;
+- la entrada del menu del area de administracion.
 
 Las pantallas del administrador extienden `layouts.admin`, asi que heredan el
 aspecto del tema que tengas: con Arix se ven como Arix, y sin Arix se ven como
-el panel de siempre. El aviso del cliente y el enlace del menu lateral se
-inyectan en la respuesta HTML ya generada, desde un middleware, por eso
-sobreviven a las actualizaciones del tema.
+el panel de siempre.
+
+### Como se pone el boton del menu del admin
+
+Es **HTML del servidor**, no JavaScript. El instalador elige solo:
+
+| Tu tema | Donde va la entrada |
+| --- | --- |
+| Trae hueco para extensiones | un archivo en `resources/views/admin/extensions/logspterodactyl.blade.php` |
+| No lo trae | un `<li>` entre marcas `LogsPterodactyl NAV` en `resources/views/layouts/admin.blade.php` |
+
+No hace falta recompilar el panel: esa parte no es React.
+
+Antes esto lo hacia un `admin.js` que se colgaba del menu manipulando el DOM
+en cada carga de pagina. **Ese archivo ya no existe.**
+
+La entrada lleva un `@if (Route::has('admin.logspterodactyl.index'))`, asi que
+si algun dia se queda huerfana lo peor que pasa es que no salga el boton: el
+area de administracion **no** da error 500.
+
+### Que se inyecta y donde
+
+Solo queda una cosa, y solo en un sitio: el aviso de instalacion atascada del
+area de cliente. Se cuelga **unicamente en `/server/<id>`**, que es la unica
+pantalla donde puede salir.
+
+| Pagina | Etiquetas anadidas |
+| --- | --- |
+| `/`, `/account`, `/account/api`... | **0** |
+| `/admin`, `/admin/nodes`... | **0** |
+| `/admin/logspterodactyl` | **0** (su css lo carga su propia pantalla) |
+| `/server/<id>` | 3 (`client.css`, la configuracion y `client.js`) |
+
+Sigue siendo un middleware, y no una plantilla, porque el area de cliente es
+una aplicacion React cuyo HTML genera el propio panel y el tema Arix reemplaza
+esas plantillas cada vez que se instala o se actualiza.
+
+**No hay ni un `MutationObserver` ni ningun bucle rastreando la pagina.** El
+`client.js` mira el estado de la instalacion una vez cada 10 segundos, se para
+si la pestana esta en segundo plano y no pregunta nada si no estas en la
+pantalla de un servidor.
 
 ---
 
