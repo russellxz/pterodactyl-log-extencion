@@ -25,6 +25,17 @@
 @endsection
 
 @section('content')
+    {{--
+        El css de la extension se carga AQUI, en su propia pantalla.
+
+        Antes lo metia un middleware en TODAS las paginas del panel, junto con
+        un admin.js que se colgaba del menu lateral manipulando el DOM. Eso es
+        inyectar. Ahora el menu es un archivo blade de verdad (lo pone el
+        instalador) y el css solo se carga en las pantallas de la extension:
+        el resto del panel no recibe ni una etiqueta extra.
+    --}}
+    <link rel="stylesheet" href="/extensions/logspterodactyl/admin.css?v={{ \Pterodactyl\Extensions\LogsPterodactyl\LogsPterodactylServiceProvider::VERSION }}">
+
     <div class="row">
         <div class="col-xs-12">
             <nav class="logspterodactyl-tabs">

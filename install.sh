@@ -172,15 +172,88 @@ else
     exit 1
 fi
 
-# --- 5. Permisos ------------------------------------------------------------
+# --- 5. Entrada en el menu del area de administracion -----------------------
+#
+# Antes esto lo hacia un admin.js que se colgaba del menu manipulando el DOM.
+# Ahora es blade de verdad, igual que en DNS Reverse: si el tema trae hueco
+# para extensiones se deja el archivo ahi, y si no, se mete un <li> entre
+# marcas en su plantilla. No hace falta recompilar nada: esta parte del panel
+# es HTML del servidor.
 
-title "5. Ajustando permisos"
+title "5. Anadiendo la entrada al menu del admin"
+
+HUECO_ADMIN="$PANEL/resources/views/admin/extensions"
+LAYOUT_ADMIN="$PANEL/resources/views/layouts/admin.blade.php"
+
+# Restos del metodo anterior, para no acabar con la entrada repetida.
+rm -f "$PANEL/public/extensions/logspterodactyl/admin.js"
+
+if [ -d "$HUECO_ADMIN" ]; then
+    cat > "$HUECO_ADMIN/logspterodactyl.blade.php" <<'BLADE'
+{{--
+    Entrada del menu de LogsPterodactyl.
+
+    El @if NO sobra: si algun dia se desinstala la extension y este archivo se
+    queda aqui, route() lanzaria una excepcion y el area de administracion
+    entera daria error 500. Comprobando primero que la ruta existe, lo peor que
+    puede pasar es que no salga el boton.
+--}}
+@if (Route::has('admin.logspterodactyl.index'))
+    <li class="header">HERRAMIENTAS</li>
+    <li class="{{ Route::currentRouteNamed('admin.logspterodactyl.*') ? 'active' : '' }}">
+        <a href="{{ route('admin.logspterodactyl.index') }}">
+            <i data-lucide="file-text"></i> <i class="fa fa-file-text-o"></i> <span>LogsPterodactyl</span>
+        </a>
+    </li>
+@endif
+BLADE
+    ok "Entrada anadida al menu del admin (hueco del tema)"
+elif [ -f "$LAYOUT_ADMIN" ]; then
+    if grep -q 'LogsPterodactyl NAV' "$LAYOUT_ADMIN"; then
+        ok "La entrada del admin ya estaba en la plantilla"
+    else
+        NAV_ADMIN=$(cat <<'BLADE'
+                        {{-- LogsPterodactyl NAV START --}}
+                        @if (Route::has('admin.logspterodactyl.index'))
+                        <li class="{{ Route::currentRouteNamed('admin.logspterodactyl.*') ? 'active' : '' }}">
+                            <a href="{{ route('admin.logspterodactyl.index') }}">
+                                <i data-lucide="file-text"></i> <i class="fa fa-file-text-o"></i> <span>LogsPterodactyl</span>
+                            </a>
+                        </li>
+                        @endif
+                        {{-- LogsPterodactyl NAV END --}}
+BLADE
+)
+        awk -v block="$NAV_ADMIN" '
+            { print }
+            /route\(.admin\.nodes.\)/ { encontrado = 1 }
+            encontrado && /<\/li>/ { print block; encontrado = 0 }
+        ' "$LAYOUT_ADMIN" > /tmp/logsptero-admin.tmp \
+            && mv /tmp/logsptero-admin.tmp "$LAYOUT_ADMIN"
+
+        if grep -q 'LogsPterodactyl NAV' "$LAYOUT_ADMIN"; then
+            ok "Entrada anadida al menu del admin"
+        else
+            warn "No se pudo anadir la entrada al menu del admin."
+            warn "Entra directamente a /admin/logspterodactyl"
+        fi
+    fi
+else
+    warn "No se encontro la plantilla del menu del admin."
+    warn "Entra directamente a /admin/logspterodactyl"
+fi
+
+php artisan view:clear >/dev/null 2>&1 || true
+
+# --- 6. Permisos ------------------------------------------------------------
+
+title "6. Ajustando permisos"
 
 bash "$HERE/permissions.sh" "$PANEL" || warn "Algunos permisos no se pudieron ajustar (vuelve a lanzarlo con sudo)"
 
-# --- 6. Comprobacion final --------------------------------------------------
+# --- 7. Comprobacion final --------------------------------------------------
 
-title "6. Comprobacion final"
+title "7. Comprobacion final"
 
 php artisan logspterodactyl:doctor || true
 
