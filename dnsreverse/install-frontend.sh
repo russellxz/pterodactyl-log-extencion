@@ -455,57 +455,6 @@ if [ "$ARIX" -eq 1 ] && [ "$MODO_HUECO" -eq 0 ]; then
     fi
 fi
 
-# --- El boton del area de administracion ------------------------------------
-#
-# Esta parte del panel es Blade, no React: sale al momento y no hay que
-# compilar nada. Si el tema trae el hueco para extensiones, se deja ahi el
-# archivo; si no, se mete el <li> en la plantilla, como hacia la extension
-# original.
-HUECO_ADMIN="$PANEL/resources/views/admin/extensions"
-
-if [ -d "$HUECO_ADMIN" ]; then
-    cat > "$HUECO_ADMIN/dnsreverse.blade.php" <<'BLADE'
-<li class="header">DNS REVERSE</li>
-<li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
-    <a href="{{ route('admin.dnsreverse.index') }}">
-        <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
-    </a>
-</li>
-BLADE
-    ok "Entrada anadida al menu del admin (hueco del tema)"
-elif [ -f "$PANEL/resources/views/layouts/admin.blade.php" ]; then
-    if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
-        ok "La entrada del admin ya estaba en la plantilla"
-    else
-        NAV_ADMIN=$(cat <<'BLADE'
-                        {{-- DnsReverse NAV START --}}
-                        <li class="{{ Route::currentRouteNamed('admin.dnsreverse.*') ? 'active' : '' }}">
-                            <a href="{{ route('admin.dnsreverse.index') }}">
-                                <i data-lucide="globe"></i> <i class="fa fa-globe"></i> <span>DNS Reverse</span>
-                            </a>
-                        </li>
-                        {{-- DnsReverse NAV END --}}
-BLADE
-)
-        awk -v block="$NAV_ADMIN" '
-            { print }
-            /route\(.admin\.nodes.\)/ { encontrado = 1 }
-            encontrado && /<\/li>/ { print block; encontrado = 0 }
-        ' "$PANEL/resources/views/layouts/admin.blade.php" > /tmp/dnsrev-admin.tmp \
-            && mv /tmp/dnsrev-admin.tmp "$PANEL/resources/views/layouts/admin.blade.php"
-
-        if grep -q 'DnsReverse NAV' "$PANEL/resources/views/layouts/admin.blade.php"; then
-            ok "Entrada anadida al menu del admin"
-        else
-            warn "No se pudo anadir la entrada al menu del admin."
-            warn "Entra directamente a /admin/dnsreverse"
-        fi
-    fi
-fi
-
-ajustar_permisos
-php "$PANEL/artisan" view:clear >/dev/null 2>&1
-
 # --- Resumen ----------------------------------------------------------------
 
 printf '\n%s  Modo nativo instalado%s\n' "$G$B" "$N"
