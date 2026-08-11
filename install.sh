@@ -145,6 +145,31 @@ title "3. Preparando el panel"
 
 cd "$PANEL" || exit 1
 
+# --- Artisan SIEMPRE como el usuario del servidor web ---------------------
+#
+# Esto NO es un detalle. "php artisan" escribe en storage/ (caches, vistas
+# compiladas, logs). Si se lanza como root, esos archivos quedan siendo de
+# root, y despues el panel -que corre como www-data- ya no puede escribir
+# ahi. El sintoma es este, y tumba el panel entero:
+#
+#   file_put_contents(.../storage/framework/cache/data/...):
+#   Failed to open stream: No such file or directory
+#
+# Con el tema Arix eso ademas deja a los clientes con error 403, porque su
+# comprobacion de licencia necesita la cache.
+USUARIO_WEB=""
+for u in www-data nginx apache; do
+    if id "$u" >/dev/null 2>&1; then USUARIO_WEB="$u"; break; fi
+done
+
+artisan() {
+    if [ -n "$USUARIO_WEB" ] && [ "$(id -u)" -eq 0 ]; then
+        sudo -u "$USUARIO_WEB" php artisan "$@"
+    else
+        php artisan "$@"
+    fi
+}
+
 if command -v composer >/dev/null 2>&1; then
     if COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload -o --no-interaction >/dev/null 2>&1; then
         ok "Autocarga de clases regenerada"
@@ -155,15 +180,15 @@ else
     warn "composer no esta instalado (no suele hacer falta, se continua)"
 fi
 
-php artisan config:clear >/dev/null 2>&1 && ok "Cache de configuracion limpiada" || warn "No se pudo limpiar la cache de configuracion"
-php artisan view:clear   >/dev/null 2>&1 && ok "Cache de vistas limpiada"        || warn "No se pudo limpiar la cache de vistas"
-php artisan route:clear  >/dev/null 2>&1 && ok "Cache de rutas limpiada"         || warn "No se pudo limpiar la cache de rutas"
+artisan config:clear >/dev/null 2>&1 && ok "Cache de configuracion limpiada" || warn "No se pudo limpiar la cache de configuracion"
+artisan view:clear   >/dev/null 2>&1 && ok "Cache de vistas limpiada"        || warn "No se pudo limpiar la cache de vistas"
+artisan route:clear  >/dev/null 2>&1 && ok "Cache de rutas limpiada"         || warn "No se pudo limpiar la cache de rutas"
 
 # --- 4. Base de datos -------------------------------------------------------
 
 title "4. Creando las tablas"
 
-if php artisan logspterodactyl:install; then
+if artisan logspterodactyl:install; then
     ok "Base de datos lista"
 else
     err "Fallo al preparar la base de datos."
@@ -243,19 +268,24 @@ else
     warn "Entra directamente a /admin/logspterodactyl"
 fi
 
-php artisan view:clear >/dev/null 2>&1 || true
+artisan view:clear >/dev/null 2>&1 || true
 
-# --- 6. Permisos ------------------------------------------------------------
+# --- 6. Comprobacion final --------------------------------------------------
 
-title "6. Ajustando permisos"
+title "6. Comprobacion final"
+
+artisan logspterodactyl:doctor || true
+
+# --- 7. Permisos, AL FINAL DEL TODO -----------------------------------------
+#
+# Va el ultimo a proposito: cualquier "php artisan" de los pasos anteriores
+# puede haber creado archivos en storage/, y si alguno quedo con el dueno
+# equivocado el panel dejaria de poder escribir su cache. Ajustando los
+# permisos aqui, lo ultimo, eso no puede pasar.
+
+title "7. Ajustando permisos"
 
 bash "$HERE/permissions.sh" "$PANEL" || warn "Algunos permisos no se pudieron ajustar (vuelve a lanzarlo con sudo)"
-
-# --- 7. Comprobacion final --------------------------------------------------
-
-title "7. Comprobacion final"
-
-php artisan logspterodactyl:doctor || true
 
 # --- Resumen ----------------------------------------------------------------
 
