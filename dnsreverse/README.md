@@ -74,6 +74,40 @@ Al revisar el codigo del complemento de wings aparecieron cosas serias:
 10. La configuracion de nginx no pasaba **WebSockets** ni las cabeceras
     `X-Real-IP` / `X-Forwarded-Proto`.
 
+### Y los que hacian que el dominio no cargara nunca
+
+Sintoma: el DNS aparece creado y verde en el panel, pero el cliente entra a su
+pagina y el navegador le dice **"no se puede acceder a este sitio, revisa que
+no haya errores de ortografia"** (`DNS_PROBE_FINISHED_NXDOMAIN`). Pasaba tanto
+con certificado de origen como con el de Let's Encrypt, porque ninguno de los
+dos tiene nada que ver: lo que faltaba era el registro DNS.
+
+11. **No se miraba si la zona de Cloudflare estaba activa.** Si los nameservers
+    del dominio todavia no apuntan a Cloudflare, la API acepta los registros y
+    contesta "correcto", pero el nombre no existe para nadie. Ahora se
+    comprueba antes de tocar nada y, si la zona no esta `active`, no se crea el
+    DNS y se dice que nameservers hay que poner en el registrador.
+12. **Si el dominio no tenia token de Cloudflare, el registro se saltaba en
+    silencio.** El sitio se montaba en el nodo y el panel daba el DNS por
+    bueno. Ahora se avisa por pantalla y queda apuntado en el propio DNS.
+13. **El identificador de zona guardado no se comprobaba nunca.** Si el dominio
+    se movia de cuenta de Cloudflare, los registros se seguian creando en la
+    zona vieja. Ahora se comprueba que la zona sea la de ese dominio y, si no,
+    se busca otra vez.
+14. **Si el registro ya existia, Cloudflare devolvia error y la creacion se
+    caia entera** (codigo 81057). Ahora se corrige el registro que hay.
+15. **No se volvia a leer el registro despues de crearlo.** Ahora si: si lo que
+    quedo en Cloudflare no es lo que se pidio, se para y se explica.
+16. **El certificado de origen del cliente solo vivia en el nodo.** Al
+    reinstalar un nodo se perdia y no habia forma de recuperarlo desde el
+    panel. Ahora se guarda cifrado junto al DNS y la resincronizacion lo vuelve
+    a mandar.
+17. **Un certificado recien emitido no guardaba su fecha de caducidad**: solo
+    se apuntaba al renovar, asi que en el panel salia vacia.
+
+Ademas, para arreglar los dominios que ya estaban rotos hay un comando y un
+boton nuevos: `php artisan dnsreverse:fix-dns` y **Reparar DNS**.
+
 ---
 
 ## Antes de empezar
@@ -573,6 +607,9 @@ Todos se ejecutan desde la carpeta del panel (`cd /var/www/pterodactyl`).
 | `php artisan dnsreverse:sync` | Vuelve a mandar a los nodos la configuracion de todos los DNS. |
 | `php artisan dnsreverse:sync --node=1` | Solo los de un nodo. |
 | `php artisan dnsreverse:sync --dry-run` | Solo lista lo que haria, sin tocar los nodos. |
+| `php artisan dnsreverse:fix-dns` | Crea en Cloudflare los registros que falten o esten mal. **Es lo que arregla el "no se puede acceder a este sitio".** |
+| `php artisan dnsreverse:fix-dns --dry-run` | Solo dice cuales estan mal, sin tocar Cloudflare. |
+| `php artisan dnsreverse:fix-dns --domain=midominio.com` | Solo los DNS de ese dominio base. |
 | `php artisan dnsreverse:renew` | Renueva ya los certificados que caducan pronto. |
 | `php artisan dnsreverse:renew --days=45 --force` | Renueva con mas margen, aunque la automatica este apagada. |
 | `php artisan dnsreverse:uninstall` | Informa de lo que hay guardado. Por defecto **no borra nada**. |
@@ -602,6 +639,49 @@ Lo primero, siempre:
 ```bash
 cd /var/www/pterodactyl && php artisan dnsreverse:doctor
 ```
+
+### El dominio del cliente no carga: "revisa que no haya errores de ortografia"
+
+Ese cartel del navegador (`DNS_PROBE_FINISHED_NXDOMAIN`) significa una sola
+cosa: **el nombre no existe en DNS**. No es la pagina del cliente, ni el
+certificado, ni nginx. Es que el registro no esta puesto, o esta puesto donde
+no se ve.
+
+Lo primero, saber por que. En **Admin -> DNS Reverse -> DNS de clientes**,
+boton **Revisar** de ese dominio: dice exactamente cual de estos tres es.
+
+**1. La zona de Cloudflare no esta activa.** Es el caso mas comun y el mas
+traicionero: Cloudflare acepta los registros y devuelve "correcto", pero como
+los nameservers del dominio todavia no apuntan a Cloudflare, nadie en internet
+le pregunta a Cloudflare por ese dominio. El arreglo esta en el registrador
+donde compraste el dominio: cambiar sus nameservers a los que te da Cloudflare.
+La zona pasa a `active` sola en cuanto los detecte.
+
+Para verlo antes de que pase: **Dominios -> Editar -> Probar conexion**. Ahi
+sale el estado de la zona y, si no esta activa, los nameservers a los que hay
+que cambiarla.
+
+**2. El registro no llego a crearse.** Pasa con los dominios que se dieron de
+alta sin token de Cloudflare, o si alguien lo borro a mano. Se arregla de una
+vez para todos:
+
+```bash
+cd /var/www/pterodactyl
+php artisan dnsreverse:fix-dns --dry-run   # ver cuales estan mal
+php artisan dnsreverse:fix-dns             # crearlos
+```
+
+O desde el panel, con el boton **Reparar DNS** de la pestana "DNS de
+clientes" (repara todos) o el boton naranja de cada fila (repara ese).
+
+**3. El dominio es del cliente.** Si el tipo es "Dominio propio", el registro
+lo tiene que crear el en su proveedor: un registro A apuntando a la IP del
+nodo. El panel se lo dice en su pantalla al crearlo, con la IP exacta.
+
+> Los cambios de DNS tardan unos minutos en verse desde todas partes. Si
+> acabas de repararlo, dale 5-10 minutos antes de dar nada por malo, y prueba
+> desde otra red (los datos del movil sirven): tu propio ordenador puede tener
+> el "no existe" guardado en cache.
 
 ### "DNS Reverse" no sale en el menu del admin
 

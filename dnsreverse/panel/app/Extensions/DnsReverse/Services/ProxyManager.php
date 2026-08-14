@@ -170,6 +170,36 @@ class ProxyManager
 
         [$modoSsl, $cert, $clave] = $this->resolverCertificado($entrada, $dominioBase, $tipo, $dominio);
 
+        $ipDestino = trim((string) $allocation->ip);
+
+        // --- Antes de tocar nada: ¿va a poder resolver este nombre? ---------
+        //
+        // Esto es lo que fallaba y por lo que el cliente acababa viendo
+        // "DNS_PROBE_FINISHED_NXDOMAIN" con todo verde en el panel. Un registro
+        // creado en una zona que no esta activa en Cloudflare (los nameservers
+        // del dominio no apuntan a Cloudflare) se guarda sin dar ningun error,
+        // pero no existe para nadie. Mas vale no crear nada y decirlo claro.
+
+        $avisos = [];
+        $cliente = null;
+
+        if ($dominioBase !== null) {
+            if ($dominioBase->hasToken()) {
+                $cliente = CloudflareClient::for($dominioBase);
+                $zona = $cliente->zonaLista();
+
+                if (!$zona['ok']) {
+                    throw new \RuntimeException('No se puede crear el DNS ahora mismo. ' . $zona['message']);
+                }
+            } else {
+                // Sin token no se puede crear el registro. Antes se saltaba
+                // este paso en silencio y el dominio no resolvia nunca.
+                $avisos[] = 'Este dominio no tiene Cloudflare configurado en el panel, asi que el registro DNS no se '
+                    . 'ha creado solo. Un administrador tiene que crear a mano un registro A de ' . $dominio
+                    . ' apuntando a ' . $ipDestino . ', o el dominio no funcionara.';
+            }
+        }
+
         // --- A partir de aqui ya se toca el mundo exterior -----------------
         //
         // EL ORDEN IMPORTA, y mucho. Antes se creaba el registro en Cloudflare
@@ -181,7 +211,7 @@ class ProxyManager
         // DNS se borraba: el cliente se quedaba sin nada.
         //
         // Ahora va por pasos, y cada uno se apoya en el anterior:
-        //   1. registro en Cloudflare
+        //   1. registro en Cloudflare, y se vuelve a leer para confirmarlo
         //   2. el sitio se monta en el nodo por http (sin certificado)
         //   3. se espera a que el nombre resuelva DE VERDAD
         //   4. y solo entonces se pide el certificado
@@ -191,23 +221,37 @@ class ProxyManager
 
         $registroCf = null;
         $registroSrv = null;
-        $cliente = null;
         $avisoCertificado = null;
         $modoGuardado = $modoSsl;
+        $resuelve = null;
 
         try {
             // --- 1. Cloudflare ---
-            if ($dominioBase !== null && $dominioBase->hasToken()) {
-                $cliente = CloudflareClient::for($dominioBase);
-                $naranja = $dominioBase->shouldProxy($modoSsl);
-
-                if ($tipo === ProxyRecord::TYPE_SRV) {
+            if ($cliente !== null) {
+                $naranja = $tipo === ProxyRecord::TYPE_SRV
                     // Con SRV la nube tiene que ser gris SIEMPRE: Cloudflare no
                     // sabe hablar el protocolo de Minecraft.
-                    $registroCf = $cliente->createAddressRecord($dominio, trim((string) $allocation->ip), false);
+                    ? false
+                    : $dominioBase->shouldProxy($modoSsl);
+
+                $creado = $cliente->ensureAddressRecord($dominio, $ipDestino, $naranja);
+                $registroCf = $creado['id'];
+
+                if ($creado['aviso'] !== null) {
+                    $avisos[] = $creado['aviso'];
+                }
+
+                if ($tipo === ProxyRecord::TYPE_SRV) {
                     $registroSrv = $cliente->createMinecraftSrv($nombre, $dominio, (int) $allocation->port);
-                } else {
-                    $registroCf = $cliente->createAddressRecord($dominio, trim((string) $allocation->ip), $naranja);
+                }
+
+                // Se vuelve a leer de Cloudflare: si lo que hay puesto no es lo
+                // que se pidio, se para aqui en vez de dejar al cliente con un
+                // dominio que apunta a cualquier sitio.
+                $comprobacion = $cliente->verificarRegistro($registroCf, $dominio, $ipDestino);
+
+                if (!$comprobacion['ok']) {
+                    throw new \RuntimeException('Cloudflare acepto el registro pero al releerlo no cuadra: ' . $comprobacion['message']);
                 }
             }
 
@@ -215,7 +259,7 @@ class ProxyManager
 
             $peticion = [
                 'domain' => $dominio,
-                'ip' => trim((string) $allocation->ip),
+                'ip' => $ipDestino,
                 'port' => (int) $allocation->port,
                 'ssl' => false,
                 'mode' => ProxyRecord::SSL_NONE,
@@ -235,6 +279,7 @@ class ProxyManager
                 // --- 3. Esperar a que el nombre exista de verdad ---
                 if ($registroCf !== null) {
                     $espera = DomainChecker::esperarResolucion($dominio, 90);
+                    $resuelve = $espera['ok'];
 
                     DnsEvent::record($espera['ok'] ? 'info' : 'warning', 'dns.wait',
                         'Espera a que resuelva el DNS: ' . $espera['detalle'],
@@ -274,6 +319,33 @@ class ProxyManager
                     'cert' => $cert,
                     'key' => $clave,
                 ]));
+
+                // Aqui no hace falta esperar para nada tecnico, pero si para
+                // poder decirle la verdad al cliente: si el nombre todavia no
+                // resuelve, su pagina no va a cargar y tiene que saberlo ahora,
+                // no descubrirlo el solo con un error del navegador.
+                if ($registroCf !== null) {
+                    $espera = DomainChecker::esperarResolucion($dominio, 30);
+                    $resuelve = $espera['ok'];
+
+                    if (!$espera['ok']) {
+                        $avisos[] = 'El dominio esta creado y el servidor ya lo esta esperando, pero todavia no se ve '
+                            . 'desde fuera (' . $espera['detalle'] . '). Suele tardar unos minutos la primera vez; '
+                            . 'si dentro de un rato sigue igual, avisa al administrador.';
+                    }
+                }
+            }
+
+            // Dominio propio del cliente: aqui el registro DNS no lo creamos
+            // nosotros, lo tiene que crear el en su proveedor. Se comprueba y
+            // se le dice exactamente que le falta.
+            if ($tipo === ProxyRecord::TYPE_DOMAIN) {
+                $apunta = DomainChecker::apuntaA($dominio, $ipDestino);
+                $resuelve = $apunta['resuelve'];
+
+                if (!$apunta['ok']) {
+                    $avisos[] = $apunta['mensaje'];
+                }
             }
         } catch (\Throwable $e) {
             // Se deshace lo que si se habia llegado a crear.
@@ -293,7 +365,12 @@ class ProxyManager
             throw new \RuntimeException($e->getMessage(), 0, $e);
         }
 
-        $registro = ProxyRecord::create([
+        if ($avisoCertificado !== null) {
+            array_unshift($avisos, $avisoCertificado);
+        }
+
+        $registro = new ProxyRecord();
+        $registro->fill([
             'server_id' => $server->id,
             'domain' => $dominio,
             'proxy_type' => $tipo,
@@ -308,15 +385,32 @@ class ProxyManager
             'domain_id' => $dominioBase?->id,
             'created_by' => $user->id,
             'synced_at' => now(),
-            'last_error' => $avisoCertificado,
+            // Let's Encrypt emite siempre a 90 dias. Antes esto solo se
+            // apuntaba al renovar, asi que un certificado recien emitido
+            // aparecia en el panel sin fecha de caducidad.
+            'cert_expires_at' => $modoGuardado === ProxyRecord::SSL_LETSENCRYPT && $avisoCertificado === null
+                ? now()->addDays(90)
+                : null,
+            'last_error' => $avisos === [] ? null : implode(' ', $avisos),
         ]);
 
-        DnsEvent::record($avisoCertificado === null ? 'info' : 'warning', 'create',
-            $avisoCertificado === null ? 'DNS creado' : 'DNS creado con el certificado pendiente', [
+        // El certificado del cliente se guarda con el DNS (cifrado), no solo en
+        // el nodo. Si el nodo se reinstala, la resincronizacion puede volver a
+        // ponerlo; antes se perdia y el dominio se quedaba sin certificado sin
+        // que nadie pudiera recuperarlo desde el panel.
+        if ($modoSsl === ProxyRecord::SSL_ORIGIN && $tipo === ProxyRecord::TYPE_DOMAIN) {
+            $registro->guardarCertificado($cert, $clave);
+        }
+
+        $registro->save();
+
+        DnsEvent::record($avisos === [] ? 'info' : 'warning', 'create',
+            $avisos === [] ? 'DNS creado' : 'DNS creado con avisos: ' . implode(' ', $avisos), [
                 'tipo' => $tipo,
                 'modo_ssl' => $modoGuardado,
                 'destino' => $allocation->ip . ':' . $allocation->port,
                 'nodo' => $nodo->name,
+                'resuelve' => $resuelve,
             ], $dominio, (int) $server->id, (int) $user->id);
 
         $this->registrarActividadDelPanel('server:dnsreverse.create', $server, [
@@ -392,6 +486,111 @@ class ProxyManager
         DnsEvent::record('info', 'cert.retry', 'Certificado emitido en el reintento', [], (string) $registro->domain, $registro->server_id);
 
         return ['ok' => true, 'message' => 'Certificado emitido.'];
+    }
+
+    /**
+     * Vuelve a poner en Cloudflare el registro de un DNS que ya existe en el
+     * panel.
+     *
+     * Es la reparacion de lo que se creo mientras la extension se saltaba
+     * Cloudflare en silencio (dominio sin token, zona sin activar o registro
+     * borrado a mano). El DNS sigue en el panel y el sitio sigue montado en el
+     * nodo; lo unico que falta es el registro, y eso es lo que se arregla aqui.
+     *
+     * No toca nada del nodo ni del certificado: solo el DNS.
+     *
+     * @return array{ok: bool, cambiado: bool, message: string}
+     */
+    public function repararDns(ProxyRecord $registro): array
+    {
+        if ($registro->proxy_type === ProxyRecord::TYPE_DOMAIN) {
+            return [
+                'ok' => true,
+                'cambiado' => false,
+                'message' => 'Es un dominio propio del cliente: el registro lo tiene que crear el en su proveedor.',
+            ];
+        }
+
+        $dominioBase = $this->dominioDeRegistro($registro);
+
+        if ($dominioBase === null) {
+            return ['ok' => false, 'cambiado' => false, 'message' => 'Este DNS no esta enganchado a ningun dominio del panel.'];
+        }
+
+        if (!$dominioBase->hasToken()) {
+            return [
+                'ok' => false,
+                'cambiado' => false,
+                'message' => 'El dominio ' . $dominioBase->domain . ' no tiene token de Cloudflare. Ponlo en la pestana Dominios.',
+            ];
+        }
+
+        $allocation = $registro->allocation;
+
+        if ($allocation === null) {
+            return ['ok' => false, 'cambiado' => false, 'message' => 'Este DNS no tiene puerto asignado.'];
+        }
+
+        $cliente = CloudflareClient::for($dominioBase);
+        $zona = $cliente->zonaLista();
+
+        if (!$zona['ok']) {
+            $registro->forceFill(['last_error' => $zona['message']])->save();
+
+            return ['ok' => false, 'cambiado' => false, 'message' => $zona['message']];
+        }
+
+        $ip = trim((string) $allocation->ip);
+        $naranja = $registro->proxy_type === ProxyRecord::TYPE_SRV
+            ? false
+            : $dominioBase->shouldProxy((string) $registro->ssl_mode);
+
+        try {
+            $resultado = $cliente->ensureAddressRecord((string) $registro->domain, $ip, $naranja);
+            $identificadores = [$resultado['id']];
+
+            if ($registro->proxy_type === ProxyRecord::TYPE_SRV) {
+                $etiqueta = explode('.', (string) $registro->domain)[0] ?? '';
+
+                if ($etiqueta !== '') {
+                    $identificadores[] = $cliente->createMinecraftSrv(
+                        $etiqueta,
+                        (string) $registro->domain,
+                        (int) $allocation->port
+                    );
+                }
+            }
+
+            $comprobacion = $cliente->verificarRegistro($resultado['id'], (string) $registro->domain, $ip);
+
+            if (!$comprobacion['ok']) {
+                $registro->forceFill(['last_error' => $comprobacion['message']])->save();
+
+                return ['ok' => false, 'cambiado' => false, 'message' => $comprobacion['message']];
+            }
+        } catch (\Throwable $e) {
+            $registro->forceFill(['last_error' => $e->getMessage()])->save();
+
+            return ['ok' => false, 'cambiado' => false, 'message' => $e->getMessage()];
+        }
+
+        $registro->forceFill([
+            'cf_record_id' => implode(',', $identificadores),
+            'last_error' => null,
+            'synced_at' => now(),
+        ])->save();
+
+        DnsEvent::record('info', 'dns.repair',
+            $resultado['creado'] ? 'Registro DNS creado de nuevo en Cloudflare' : 'Registro DNS corregido en Cloudflare',
+            ['ip' => $ip, 'naranja' => $naranja], (string) $registro->domain, $registro->server_id);
+
+        return [
+            'ok' => true,
+            'cambiado' => true,
+            'message' => $resultado['creado']
+                ? 'Registro creado en Cloudflare apuntando a ' . $ip . '.'
+                : 'El registro ya estaba y se ha dejado apuntando a ' . $ip . '.',
+        ];
     }
 
     /**
@@ -505,9 +704,16 @@ class ProxyManager
         $cert = '';
         $clave = '';
 
-        if ($modo === ProxyRecord::SSL_ORIGIN && $dominioBase !== null) {
-            $cert = (string) $dominioBase->ssl_cert;
-            $clave = (string) $dominioBase->ssl_key;
+        if ($modo === ProxyRecord::SSL_ORIGIN) {
+            // Primero el certificado propio del cliente (dominio suyo), que es
+            // el unico que sirve para ese dominio. Si no tiene, el comodin del
+            // dominio de la casa.
+            [$cert, $clave] = $registro->certificadoGuardado();
+
+            if (($cert === '' || $clave === '') && $dominioBase !== null) {
+                $cert = (string) $dominioBase->ssl_cert;
+                $clave = (string) $dominioBase->ssl_key;
+            }
         }
 
         if ($modo === ProxyRecord::SSL_LEGACY) {
@@ -515,7 +721,13 @@ class ProxyManager
             // que ya tiene en disco, que es lo correcto: se conserva tal cual.
             $modo = $registro->ssl_enabled ? ProxyRecord::SSL_LETSENCRYPT : ProxyRecord::SSL_NONE;
 
-            if ($dominioBase !== null && $dominioBase->hasOriginCertificate()) {
+            [$certGuardado, $claveGuardada] = $registro->certificadoGuardado();
+
+            if ($certGuardado !== '' && $claveGuardada !== '') {
+                $modo = ProxyRecord::SSL_ORIGIN;
+                $cert = $certGuardado;
+                $clave = $claveGuardada;
+            } elseif ($dominioBase !== null && $dominioBase->hasOriginCertificate()) {
                 $modo = ProxyRecord::SSL_ORIGIN;
                 $cert = (string) $dominioBase->ssl_cert;
                 $clave = (string) $dominioBase->ssl_key;

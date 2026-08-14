@@ -32,6 +32,8 @@ Route::get('/records', [Admin\RecordsController::class, 'index'])->name('records
 Route::get('/records/{record}/check', [Admin\RecordsController::class, 'check'])->name('records.check');
 Route::post('/records/{record}/certificate', [Admin\RecordsController::class, 'certificate'])->name('records.certificate');
 Route::post('/records/{record}/sync', [Admin\RecordsController::class, 'sync'])->name('records.sync');
+Route::post('/records/{record}/repair', [Admin\RecordsController::class, 'repair'])->name('records.repair');
+Route::post('/records/repair-all', [Admin\RecordsController::class, 'repairAll'])->name('records.repairall');
 Route::post('/records/{record}/delete', [Admin\RecordsController::class, 'destroy'])->name('records.delete');
 Route::post('/records/purge', [Admin\RecordsController::class, 'purge'])->name('records.purge');
 Route::post('/records/sync-all', [Admin\RecordsController::class, 'syncAll'])->name('records.syncall');

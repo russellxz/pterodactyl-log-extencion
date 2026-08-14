@@ -42,11 +42,8 @@ class DomainChecker
             $pasos[] = [
                 'nombre' => 'El nombre existe en DNS',
                 'estado' => 'error',
-                'detalle' => 'No. El navegador dara "DNS_PROBE_FINISHED_NXDOMAIN". '
-                    . 'El registro no esta creado en Cloudflare, o se borro. '
-                    . ($registro->proxy_type === ProxyRecord::TYPE_DOMAIN
-                        ? 'Como es un dominio propio del cliente, el registro lo tiene que crear el.'
-                        : 'Prueba a borrar este DNS y volver a crearlo.'),
+                'detalle' => 'No. El navegador dara "DNS_PROBE_FINISHED_NXDOMAIN" ("revisa que no haya errores '
+                    . 'de ortografia"). ' . self::porQueNoExiste($registro),
             ];
 
             return [
@@ -157,6 +154,102 @@ class DomainChecker
     }
 
     /**
+     * Por que no existe el nombre. Es LA pregunta cuando el cliente ve
+     * "DNS_PROBE_FINISHED_NXDOMAIN", y antes se contestaba a bulto.
+     *
+     * Se le pregunta a Cloudflare directamente, que es quien lo sabe: si la
+     * zona esta activa, si el registro esta puesto y a donde apunta.
+     */
+    private static function porQueNoExiste(ProxyRecord $registro): string
+    {
+        if ($registro->proxy_type === ProxyRecord::TYPE_DOMAIN) {
+            return 'Como es un dominio propio del cliente, el registro lo tiene que crear el en su proveedor '
+                . 'de DNS: un registro A apuntando a la IP del nodo.';
+        }
+
+        $dominioBase = null;
+
+        try {
+            $dominioBase = $registro->domain_id
+                ? \Pterodactyl\Extensions\DnsReverse\Models\DnsDomain::find($registro->domain_id)
+                : \Pterodactyl\Extensions\DnsReverse\Models\DnsDomain::query()
+                    ->where('domain', (string) $registro->base_domain)
+                    ->first();
+        } catch (\Throwable) {
+            $dominioBase = null;
+        }
+
+        if ($dominioBase === null) {
+            return 'El DNS no esta enganchado a ningun dominio del panel, asi que no se puede consultar Cloudflare. '
+                . 'Revisa el dominio base en la pestana Dominios.';
+        }
+
+        if (!$dominioBase->hasToken()) {
+            return 'El dominio ' . $dominioBase->domain . ' no tiene token de Cloudflare en el panel, asi que el '
+                . 'registro NUNCA se creo solo. Ponle el token en la pestana Dominios y pulsa "Reparar DNS", '
+                . 'o crea el registro a mano en Cloudflare.';
+        }
+
+        $cliente = CloudflareClient::for($dominioBase);
+        $zona = $cliente->zonaLista();
+
+        if (!$zona['ok']) {
+            return $zona['message'];
+        }
+
+        $encontrados = $cliente->findRecords((string) $registro->domain);
+
+        if ($encontrados === []) {
+            return 'La zona esta bien en Cloudflare, pero NO hay ningun registro para ' . $registro->domain
+                . '. Se borro, o nunca llego a crearse. Con el boton "Reparar DNS" se vuelve a crear.';
+        }
+
+        $detalles = [];
+
+        foreach ($encontrados as $encontrado) {
+            $detalles[] = $encontrado['type'] . ' -> ' . $encontrado['content'];
+        }
+
+        return 'Cloudflare si tiene el registro (' . implode(', ', $detalles) . ') y la zona esta activa, asi que el '
+            . 'problema esta fuera: puede ser la cache de DNS de tu propio ordenador o de tu operador. '
+            . 'Prueba desde otra red o espera unos minutos.';
+    }
+
+    /**
+     * ¿Apunta ya este dominio a la IP del nodo?
+     *
+     * Para los dominios propios del cliente: el registro lo crea el, y hasta
+     * que no lo haga su pagina no carga. Se le dice exactamente que le falta.
+     *
+     * @return array{ok: bool, resuelve: bool, mensaje: string}
+     */
+    public static function apuntaA(string $dominio, string $ipEsperada): array
+    {
+        $direcciones = self::resolverEnPublicos($dominio);
+
+        if ($direcciones === []) {
+            return [
+                'ok' => false,
+                'resuelve' => false,
+                'mensaje' => 'Tu dominio ' . $dominio . ' todavia no existe en internet. En el panel de tu dominio '
+                    . 'crea un registro A de ' . $dominio . ' apuntando a ' . $ipEsperada . '. '
+                    . 'Hasta que lo hagas, el navegador dira que no se puede acceder al sitio.',
+            ];
+        }
+
+        if (in_array($ipEsperada, $direcciones, true) || self::pareceCloudflare($direcciones)) {
+            return ['ok' => true, 'resuelve' => true, 'mensaje' => 'El dominio ya apunta bien.'];
+        }
+
+        return [
+            'ok' => false,
+            'resuelve' => true,
+            'mensaje' => 'Tu dominio ' . $dominio . ' apunta a ' . implode(', ', $direcciones)
+                . ', que no es este servidor. Cambia su registro A para que apunte a ' . $ipEsperada . '.',
+        ];
+    }
+
+    /**
      * Espera a que un nombre se vea de verdad en internet.
      *
      * Esto existe por un motivo muy concreto. Cloudflare acepta el registro al
@@ -206,7 +299,7 @@ class DomainChecker
      *
      * @return array<int, string>
      */
-    private static function resolverEnPublicos(string $dominio): array
+    public static function resolverEnPublicos(string $dominio): array
     {
         foreach (['https://cloudflare-dns.com/dns-query', 'https://dns.google/resolve'] as $servicio) {
             try {
@@ -277,7 +370,7 @@ class DomainChecker
      * Rangos publicos de Cloudflare (los mas usados). Sirve para distinguir
      * "esta detras de la nube naranja" de "apunta a cualquier otro sitio".
      */
-    private static function pareceCloudflare(array $direcciones): bool
+    public static function pareceCloudflare(array $direcciones): bool
     {
         $rangos = [
             '103.21.244.', '103.22.200.', '103.31.4.', '104.16.', '104.17.', '104.18.', '104.19.',

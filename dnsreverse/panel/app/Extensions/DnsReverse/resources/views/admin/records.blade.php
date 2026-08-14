@@ -51,6 +51,10 @@
                     {{-- Sin la clase "box-tools" a proposito: AdminLTE la coloca
                          en posicion absoluta y se montaria encima de los filtros. --}}
                     <div class="dnsreverse-toolbar">
+                        <button type="button" class="btn btn-sm btn-warning" onclick="dnsreverseRepararTodos()"
+                                title="Crea en Cloudflare los registros que falten. Es lo que arregla el &quot;no se puede acceder a este sitio&quot;.">
+                            @dnsicon('globe', 14) Reparar DNS
+                        </button>
                         <button type="button" class="btn btn-sm btn-default" onclick="dnsreverseSyncAll()">
                             @dnsicon('refresh', 14) Resincronizar todo
                         </button>
@@ -123,6 +127,15 @@
                                             onclick="dnsreverseDiagnostico({{ $registro->id }}, '{{ $registro->domain }}')">
                                         @dnsicon('search', 12)
                                     </button>
+                                    @if($registro->proxy_type !== 'domain')
+                                        <form method="POST" action="{{ route('admin.dnsreverse.records.repair', $registro->id) }}" style="display:inline;">
+                                            @csrf
+                                            <button type="submit" class="btn btn-xs btn-warning"
+                                                    title="Crear en Cloudflare el registro que falta (arregla el &quot;no se puede acceder a este sitio&quot;)">
+                                                @dnsicon('globe', 12)
+                                            </button>
+                                        </form>
+                                    @endif
                                     <form method="POST" action="{{ route('admin.dnsreverse.records.sync', $registro->id) }}" style="display:inline;">
                                         @csrf
                                         <button type="submit" class="btn btn-xs btn-default" title="Volver a mandar la configuracion al nodo">
@@ -268,6 +281,27 @@ function dnsreversePurge() {
         alert(texto);
         window.location.reload();
     }).catch(function (e) { alert('No se pudo purgar: ' + e); });
+}
+
+function dnsreverseRepararTodos() {
+    if (!confirm('Se va a revisar en Cloudflare el registro de TODOS los DNS y a crear los que falten o corregir los que apunten mal.\n\nNo se toca el nodo ni los certificados: solo el DNS. ¿Seguir?')) {
+        return;
+    }
+
+    fetch('{{ route('admin.dnsreverse.records.repairall') }}', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+    }).then(function (r) { return r.json(); }).then(function (d) {
+        var texto = d.message;
+        if (d.details && d.details.length) {
+            texto += '\n\nCon problemas:\n' + d.details.join('\n');
+        }
+        texto += '\n\nLos cambios de DNS tardan unos minutos en verse desde todas partes.';
+        alert(texto);
+        window.location.reload();
+    }).catch(function (e) { alert('No se pudo reparar: ' + e); });
 }
 
 function dnsreverseSyncAll() {
