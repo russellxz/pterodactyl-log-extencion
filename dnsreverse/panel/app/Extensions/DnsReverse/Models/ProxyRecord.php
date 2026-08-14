@@ -60,6 +60,8 @@ class ProxyRecord extends Model
         'synced_at',
         'cert_expires_at',
         'last_error',
+        'ssl_cert',
+        'ssl_key',
     ];
 
     protected $casts = [
@@ -67,6 +69,66 @@ class ProxyRecord extends Model
         'synced_at' => 'datetime',
         'cert_expires_at' => 'datetime',
     ];
+
+    /**
+     * Guarda el certificado de origen que trae el cliente con su propio
+     * dominio, cifrado con la APP_KEY del panel.
+     *
+     * Hace falta guardarlo: si no, cuando el nodo se reinstala o se reconstruye
+     * wings, el certificado desaparece del disco del nodo y no hay forma de
+     * volver a ponerlo desde el panel. El cliente tenia que borrar su dominio y
+     * crearlo otra vez pegando el certificado de nuevo.
+     */
+    public function guardarCertificado(?string $certificado, ?string $clave): void
+    {
+        $certificado = trim((string) $certificado);
+        $clave = trim((string) $clave);
+
+        if ($certificado === '' || $clave === '') {
+            $this->ssl_cert = null;
+            $this->ssl_key = null;
+
+            return;
+        }
+
+        try {
+            $this->ssl_cert = \Illuminate\Support\Facades\Crypt::encryptString($certificado);
+            $this->ssl_key = \Illuminate\Support\Facades\Crypt::encryptString($clave);
+        } catch (\Throwable) {
+            // Sin cifrado no se guarda: mejor perder la copia que dejar una
+            // clave privada en claro en la base de datos.
+            $this->ssl_cert = null;
+            $this->ssl_key = null;
+        }
+    }
+
+    /**
+     * El certificado guardado, ya descifrado.
+     *
+     * @return array{0: string, 1: string} certificado y clave, vacios si no hay
+     */
+    public function certificadoGuardado(): array
+    {
+        if (empty($this->ssl_cert) || empty($this->ssl_key)) {
+            return ['', ''];
+        }
+
+        try {
+            return [
+                \Illuminate\Support\Facades\Crypt::decryptString((string) $this->ssl_cert),
+                \Illuminate\Support\Facades\Crypt::decryptString((string) $this->ssl_key),
+            ];
+        } catch (\Throwable) {
+            // Cifrado con otra APP_KEY (panel restaurado de un respaldo con
+            // clave distinta): se trata como si no hubiera copia.
+            return ['', ''];
+        }
+    }
+
+    public function tieneCertificadoPropio(): bool
+    {
+        return $this->certificadoGuardado()[0] !== '';
+    }
 
     public function server(): BelongsTo
     {

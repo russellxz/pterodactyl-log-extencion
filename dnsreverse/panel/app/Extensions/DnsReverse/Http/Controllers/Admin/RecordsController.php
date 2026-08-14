@@ -92,6 +92,61 @@ class RecordsController extends Controller
     }
 
     /**
+     * Vuelve a crear en Cloudflare el registro que falta.
+     *
+     * Es lo que arregla el "no se puede acceder a este sitio" cuando el DNS
+     * esta en el panel pero el registro nunca llego a crearse en Cloudflare.
+     */
+    public function repair(ProxyRecord $record): RedirectResponse
+    {
+        $resultado = $this->proxies->repararDns($record);
+
+        return redirect()->back()->with(
+            $resultado['ok'] ? 'dnsreverse_success' : 'dnsreverse_error',
+            $record->domain . ': ' . $resultado['message']
+        );
+    }
+
+    /**
+     * Repara de una vez todos los DNS a los que les falta el registro.
+     */
+    public function repairAll(Request $request): JsonResponse
+    {
+        $registros = ProxyRecord::query()
+            ->with(['allocation'])
+            ->where('proxy_type', '!=', ProxyRecord::TYPE_DOMAIN)
+            ->get();
+
+        $arreglados = 0;
+        $fallidos = 0;
+        $detalles = [];
+
+        foreach ($registros as $registro) {
+            $resultado = $this->proxies->repararDns($registro);
+
+            if (!$resultado['ok']) {
+                $fallidos++;
+                $detalles[] = $registro->domain . ': ' . $resultado['message'];
+
+                continue;
+            }
+
+            if ($resultado['cambiado']) {
+                $arreglados++;
+            }
+        }
+
+        return response()->json([
+            'ok' => $fallidos === 0,
+            'repaired' => $arreglados,
+            'failed' => $fallidos,
+            'details' => $detalles,
+            'message' => 'Registros revisados: ' . $registros->count() . '. Corregidos: ' . $arreglados
+                . '. Con problemas: ' . $fallidos . '.',
+        ]);
+    }
+
+    /**
      * Vuelve a mandar la configuracion de este DNS al nodo. Util cuando se
      * reinstala un nodo o cuando la configuracion de nginx se perdio.
      */

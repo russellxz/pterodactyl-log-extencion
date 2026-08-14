@@ -107,6 +107,7 @@ class DnsReverseServiceProvider extends ServiceProvider
             Console\Commands\UninstallCommand::class,
             Console\Commands\DoctorCommand::class,
             Console\Commands\SyncCommand::class,
+            Console\Commands\FixDnsCommand::class,
             Console\Commands\RenewCertificatesCommand::class,
             Console\Commands\ArixLinkCommand::class,
         ]);

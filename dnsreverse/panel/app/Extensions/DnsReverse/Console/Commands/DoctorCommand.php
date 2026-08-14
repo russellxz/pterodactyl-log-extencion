@@ -251,12 +251,21 @@ class DoctorCommand extends Command
             $etiqueta = $dominio->domain . ($dominio->active ? '' : ' (inactivo)');
 
             if (!$dominio->hasToken()) {
-                $this->aviso($etiqueta . ': sin token de Cloudflare, los registros DNS habra que crearlos a mano.');
+                $this->aviso($etiqueta . ': sin token de Cloudflare, los registros DNS habra que crearlos a mano. '
+                    . 'Los subdominios que se creen con este dominio NO resolveran solos.');
             } elseif ($this->option('cloudflare')) {
                 $resultado = CloudflareClient::for($dominio)->check();
 
                 if ($resultado['ok']) {
                     $this->bien($etiqueta . ': ' . $resultado['message']);
+                } elseif (($resultado['status'] ?? null) !== null && $resultado['status'] !== 'active') {
+                    // La zona existe pero no esta activa: es la causa numero uno
+                    // de que los dominios de los clientes no carguen.
+                    $this->mal(
+                        $etiqueta . ': ' . $resultado['message'],
+                        'Cambia los nameservers del dominio en tu registrador. Cuando la zona pase a "active", '
+                        . 'repara los registros con: php artisan dnsreverse:fix-dns'
+                    );
                 } else {
                     $this->mal($etiqueta . ': ' . $resultado['message'], 'Revisa el token en /admin/dnsreverse/domains');
                 }
